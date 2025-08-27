@@ -32,7 +32,21 @@ const CONFIG = {
   // パフォーマンス設定
   PERFORMANCE: {
     LOG_DETAIL: true,         // 詳細ログの出力
-    BATCH_SIZE: 100           // バッチ処理サイズ
+    BATCH_SIZE: 100,          // バッチ処理サイズ
+    CHUNK_SIZE: 50,           // チャンク処理サイズ
+    CACHE_TTL: 5 * 60 * 1000, // キャッシュ有効期限（5分）
+    PARALLEL_PROCESSING: true, // 並列処理の有効化
+    MEMORY_OPTIMIZATION: true, // メモリ最適化の有効化
+    ASYNC_PROCESSING: true,   // 非同期処理の有効化
+    CACHE_ENABLED: true,      // キャッシュ機能の有効化
+    PERFORMANCE_MONITORING: true, // パフォーマンス監視の有効化
+    
+    // Phase 3専用の最適化設定
+    PHASE3_BATCH_SIZE: 50,    // Phase 3のバッチ処理サイズ
+    PHASE3_CACHE_TTL: 10 * 60 * 1000, // Phase 3のキャッシュ有効期限（10分）
+    PHASE3_MAPPING_CACHE: true, // Phase 3のマッピング結果キャッシュ
+    PHASE3_SEARCH_CACHE: true,  // Phase 3の検索結果キャッシュ
+    PHASE3_OUTPUT_BATCH: true   // Phase 3の出力バッチ処理
   },
   
   // Phase 3: Do書き出し項目マッピングルール
@@ -40,8 +54,8 @@ const CONFIG = {
     // 商品コード
     '商品コード': {
       keywords: ['返礼品コード'],
-      newKeywords: ['新', '最新', '現在', '現行', '現在使用'],  // 新を示す部分一致キーワード
-      oldKeywords: ['旧', '古い', '以前', '過去', '旧版', '旧式']   // 旧を示す部分一致キーワード
+      fallbackKeywords: ['返礼品コード(旧)', '返礼品コード(新)'],
+      priority: 'new'  // 新を優先
     },
     
     // 集荷先名
@@ -112,8 +126,8 @@ const CONFIG = {
     // 寄附金額1
     '寄附金額1': {
       keywords: ['寄附額'],
-      newKeywords: ['新', '最新', '現在', '現行', '現在使用'],  // 新を示す部分一致キーワード
-      oldKeywords: ['旧', '古い', '以前', '過去', '旧版', '旧式']   // 旧を示す部分一致キーワード
+      fallbackKeywords: ['寄附額(旧)', '寄附額(新)'],
+      priority: 'new'  // 新を優先
     }
   }
 };

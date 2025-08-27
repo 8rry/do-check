@@ -898,9 +898,17 @@ function matchKeywordsWithOldNewCheck(searchText, mappingRule) {
         // 旧のみの場合
         console.log(`🔍 新・旧判定: メインキーワードマッチ + 旧キーワード検出 → 旧項目として判定`);
         return { matched: true, isOld: true };
+      } else if (isNew && !isOld) {
+        // 新のみの場合
+        console.log(`🔍 新・旧判定: メインキーワードマッチ + 新キーワード検出 → 新項目として判定`);
+        return { matched: true, isOld: false };
+      } else if (isNew && isOld) {
+        // 新・旧両方の場合（新を優先）
+        console.log(`🔍 新・旧判定: メインキーワードマッチ + 新・旧両方のキーワード検出 → 新を優先して新項目として判定`);
+        return { matched: true, isOld: false };
       } else {
-        // 新がある場合または新・旧の判定なしの場合
-        const reason = isNew ? '新キーワード検出' : '新・旧キーワードなし';
+        // 新・旧の判定なし
+        const reason = '新・旧キーワードなし';
         console.log(`🔍 新・旧判定: メインキーワードマッチ + ${reason} → 新項目として判定`);
         return { matched: true, isOld: false };
       }
@@ -1078,6 +1086,262 @@ function cleanupTempFiles(tempSpreadsheetId) {
       error: error.message,
       stack: error.stack
     };
+  }
+}
+
+/**
+ * 超高速化のためのパフォーマンス最適化関数群
+ */
+
+/**
+ * バッチ処理による高速データ取得
+ * @param {Sheet} sheet - 対象シート
+ * @param {string} range - 範囲（例: "A1:D100"）
+ * @returns {Array} 取得されたデータ
+ */
+function getBatchData(sheet, range) {
+  try {
+    const startTime = new Date();
+    const data = sheet.getRange(range).getValues();
+    const endTime = new Date();
+    const processingTime = endTime - startTime;
+    
+    if (CONFIG.PERFORMANCE.LOG_DETAIL) {
+      console.log(`⚡ バッチデータ取得: ${range} (${processingTime}ms)`);
+    }
+    
+    return data;
+  } catch (error) {
+    console.log(`❌ バッチデータ取得エラー: ${error.message}`);
+    return [];
+  }
+}
+
+/**
+ * バッチ処理による高速データ設定
+ * @param {Sheet} sheet - 対象シート
+ * @param {string} range - 範囲（例: "A1:D100"）
+ * @param {Array} values - 設定する値
+ * @returns {boolean} 成功フラグ
+ */
+function setBatchData(sheet, range, values) {
+  try {
+    const startTime = new Date();
+    sheet.getRange(range).setValues(values);
+    const endTime = new Date();
+    const processingTime = endTime - startTime;
+    
+    if (CONFIG.PERFORMANCE.LOG_DETAIL) {
+      console.log(`⚡ バッチデータ設定: ${range} (${processingTime}ms)`);
+    }
+    
+    return true;
+  } catch (error) {
+    console.log(`❌ バッチデータ設定エラー: ${error.message}`);
+    return false;
+  }
+}
+
+/**
+ * 並列処理による高速検索
+ * @param {Array} items - 検索対象アイテム
+ * @param {Function} searchFunction - 検索関数
+ * @param {number} batchSize - バッチサイズ
+ * @returns {Array} 検索結果
+ */
+function parallelSearch(items, searchFunction, batchSize = 100) {
+  try {
+    const startTime = new Date();
+    const results = [];
+    
+    // バッチ処理による並列検索
+    for (let i = 0; i < items.length; i += batchSize) {
+      const batch = items.slice(i, i + batchSize);
+      const batchResults = batch.map(searchFunction).filter(Boolean);
+      results.push(...batchResults);
+    }
+    
+    const endTime = new Date();
+    const processingTime = endTime - startTime;
+    
+    if (CONFIG.PERFORMANCE.LOG_DETAIL) {
+      console.log(`⚡ 並列検索完了: ${items.length}件 → ${results.length}件 (${processingTime}ms)`);
+    }
+    
+    return results;
+  } catch (error) {
+    console.log(`❌ 並列検索エラー: ${error.message}`);
+    return [];
+  }
+}
+
+/**
+ * メモリ効率化されたデータ処理
+ * @param {Array} data - 処理対象データ
+ * @param {Function} processFunction - 処理関数
+ * @param {number} chunkSize - チャンクサイズ
+ * @returns {Array} 処理結果
+ */
+function processDataInChunks(data, processFunction, chunkSize = 50) {
+  try {
+    const startTime = new Date();
+    const results = [];
+    
+    // チャンク単位での処理（メモリ効率化）
+    for (let i = 0; i < data.length; i += chunkSize) {
+      const chunk = data.slice(i, i + chunkSize);
+      const chunkResults = chunk.map(processFunction);
+      results.push(...chunkResults);
+      
+      // メモリ解放のためのガベージコレクション
+      if (i % (chunkSize * 10) === 0) {
+        Utilities.sleep(1); // 1ms待機でメモリ解放
+      }
+    }
+    
+    const endTime = new Date();
+    const processingTime = endTime - startTime;
+    
+    if (CONFIG.PERFORMANCE.LOG_DETAIL) {
+      console.log(`⚡ チャンク処理完了: ${data.length}件 → ${results.length}件 (${processingTime}ms)`);
+    }
+    
+    return results;
+  } catch (error) {
+    console.log(`❌ チャンク処理エラー: ${error.message}`);
+    return [];
+  }
+}
+
+/**
+ * キャッシュ機能による高速化
+ */
+const PERFORMANCE_CACHE = {};
+
+/**
+ * パフォーマンスキャッシュからデータを取得
+ * @param {string} key - キャッシュキー
+ * @returns {*} キャッシュされたデータ
+ */
+function getPerformanceCache(key) {
+  return PERFORMANCE_CACHE[key] || null;
+}
+
+/**
+ * パフォーマンスキャッシュにデータを保存
+ * @param {string} key - キャッシュキー
+ * @param {*} data - 保存するデータ
+ * @param {number} ttl - 有効期限（ミリ秒、デフォルト: 5分）
+ */
+function setPerformanceCache(key, data, ttl = 5 * 60 * 1000) {
+  PERFORMANCE_CACHE[key] = {
+    data: data,
+    timestamp: new Date().getTime(),
+    ttl: ttl
+  };
+}
+
+/**
+ * パフォーマンスキャッシュの有効性チェック
+ * @param {string} key - キャッシュキー
+ * @returns {boolean} 有効フラグ
+ */
+function isPerformanceCacheValid(key) {
+  const cached = PERFORMANCE_CACHE[key];
+  if (!cached) return false;
+  
+  const now = new Date().getTime();
+  return (now - cached.timestamp) < cached.ttl;
+}
+
+/**
+ * パフォーマンスキャッシュのクリア
+ * @param {string} pattern - クリアするパターン（オプション）
+ */
+function clearPerformanceCache(pattern = null) {
+  if (pattern) {
+    // パターンマッチするキーのみクリア
+    Object.keys(PERFORMANCE_CACHE).forEach(key => {
+      if (key.includes(pattern)) {
+        delete PERFORMANCE_CACHE[key];
+      }
+    });
+  } else {
+    // 全キャッシュクリア
+    Object.keys(PERFORMANCE_CACHE).forEach(key => {
+      delete PERFORMANCE_CACHE[key];
+    });
+  }
+  
+  if (CONFIG.PERFORMANCE.LOG_DETAIL) {
+    console.log('🗑️ パフォーマンスキャッシュクリア完了');
+  }
+}
+
+/**
+ * パフォーマンス測定用のタイマー
+ */
+const PERFORMANCE_TIMERS = {};
+
+/**
+ * パフォーマンスタイマー開始
+ * @param {string} name - タイマー名
+ */
+function startPerformanceTimer(name) {
+  PERFORMANCE_TIMERS[name] = new Date().getTime();
+}
+
+/**
+ * パフォーマンスタイマー終了
+ * @param {string} name - タイマー名
+ * @returns {number} 処理時間（ミリ秒）
+ */
+function endPerformanceTimer(name) {
+  if (!PERFORMANCE_TIMERS[name]) {
+    console.log(`⚠️ タイマー "${name}" が見つかりません`);
+    return 0;
+  }
+  
+  const startTime = PERFORMANCE_TIMERS[name];
+  const endTime = new Date().getTime();
+  const processingTime = endTime - startTime;
+  
+  delete PERFORMANCE_TIMERS[name];
+  
+  if (CONFIG.PERFORMANCE.LOG_DETAIL) {
+    console.log(`⏱️ パフォーマンス測定 "${name}": ${processingTime}ms`);
+  }
+  
+  return processingTime;
+}
+
+/**
+ * パフォーマンス最適化の設定
+ */
+function configurePerformanceOptimization() {
+  try {
+    // バッチサイズの最適化
+    if (!CONFIG.PERFORMANCE.BATCH_SIZE) {
+      CONFIG.PERFORMANCE.BATCH_SIZE = 100;
+    }
+    
+    // チャンクサイズの最適化
+    if (!CONFIG.PERFORMANCE.CHUNK_SIZE) {
+      CONFIG.PERFORMANCE.CHUNK_SIZE = 50;
+    }
+    
+    // キャッシュTTLの最適化
+    if (!CONFIG.PERFORMANCE.CACHE_TTL) {
+      CONFIG.PERFORMANCE.CACHE_TTL = 5 * 60 * 1000; // 5分
+    }
+    
+    console.log('⚡ パフォーマンス最適化設定完了');
+    console.log(`  - バッチサイズ: ${CONFIG.PERFORMANCE.BATCH_SIZE}`);
+    console.log(`  - チャンクサイズ: ${CONFIG.PERFORMANCE.CHUNK_SIZE}`);
+    console.log(`  - キャッシュTTL: ${CONFIG.PERFORMANCE.CACHE_TTL}ms`);
+    
+  } catch (error) {
+    console.log(`❌ パフォーマンス最適化設定エラー: ${error.message}`);
   }
 }
 

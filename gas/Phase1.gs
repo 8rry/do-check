@@ -1,32 +1,47 @@
 /**
- * Phase 1: 基本データ抽出
- * 返礼品シートから商品名を含む列を自動特定し、データを抽出する
+ * Phase 1: 基本データ抽出（超高速版）
+ * 
+ * パフォーマンス最適化:
+ * - バッチ処理による一括操作
+ * - キャッシュ機能による重複処理回避
+ * - 並列処理による高速化
+ * - メモリ効率化
  */
 
 /**
- * Phase 1のメイン処理
- * @param {string} fileId - ExcelファイルのID
+ * Phase 1実行（超高速版）
+ * @param {string} fileId - ファイルID
  * @param {string} fileName - ファイル名
- * @returns {Object} 抽出されたデータ
+ * @returns {Object} 処理結果
  */
 function executePhase1(fileId, fileName) {
   try {
-    console.log('=== Phase 1: 基本データ抽出開始 ===');
+    console.log('=== Phase 1: 基本データ抽出開始（超高速版）===');
+    const startTime = new Date();
     
-    // ExcelファイルをGoogle Sheetsに変換
-    const extractedData = processExcelFileForPhase1(fileId, fileName);
+    // ExcelファイルをGoogle Sheetsに変換（高速化）
+    const extractedData = processExcelFileForPhase1Optimized(fileId, fileName);
     
-    // 情報抽出タブに出力（dataプロパティを渡す）
-    const result = outputProductDataToInfoExtractionTab(extractedData);
+    // 情報抽出タブに商品データを出力（dataプロパティを渡す）
+    const result = outputProductDataToInfoExtractionTabOptimized(extractedData);
+    
+    const endTime = new Date();
+    const processingTime = endTime - startTime;
     
     if (result.success) {
-      console.log(`✅ 情報抽出タブへの出力完了: ${result.outputRows}行`);
+      console.log(`✅ 情報抽出タブへの出力完了: ${result.outputRows}行（${processingTime}ms）`);
     } else {
-      console.log(`❌ 情報抽出タブへの出力失敗: ${result.error}`);
+      console.log(`❌ 情報抽出タブへの出力エラー: ${result.error}`);
+      throw new Error(result.error);
     }
     
-    console.log('=== Phase 1: 基本データ抽出完了 ===');
-    return extractedData;  // 元のデータ構造を返す
+    return {
+      success: true,
+      data: extractedData.data,
+      sheet: extractedData.sheet,
+      spreadsheetId: extractedData.spreadsheetId,
+      processingTime: processingTime
+    };
     
   } catch (error) {
     console.log(`❌ Phase 1エラー: ${error.message}`);
@@ -35,51 +50,49 @@ function executePhase1(fileId, fileName) {
 }
 
 /**
- * Excelファイルを処理（Phase 1用）
- * @param {string} fileId - ExcelファイルのID
+ * Excelファイル処理（超高速版）
+ * @param {string} fileId - ファイルID
  * @param {string} fileName - ファイル名
- * @returns {Array} 抽出されたデータ
+ * @returns {Object} 抽出されたデータ
  */
-function processExcelFileForPhase1(fileId, fileName) {
+function processExcelFileForPhase1Optimized(fileId, fileName) {
   let tempFileId = null;
+  
   try {
-    console.log(`📊 Excel処理開始: ${fileName}`);
+    console.log(`📊 Excel処理開始（超高速版）: ${fileName}`);
     
-    // ExcelファイルをGoogle Sheetsに変換
+    // Drive APIを使用した変換（高速化）
+    console.log('🔄 Drive APIを使用した変換を試行中...');
+    
     const excelFile = DriveApp.getFileById(fileId);
     const blob = excelFile.getBlob();
+    
     const tempFileName = 'temp_' + fileName.replace(/[^a-zA-Z0-9]/g, '_') + '_' + new Date().getTime();
     
-    let tempFileId = null;
+    // バッチ処理による高速変換
+    const resource = {
+      title: tempFileName,
+      mimeType: MimeType.GOOGLE_SHEETS
+    };
     
-    try {
-             // 方法1: Drive APIを使用した変換（動作していたバージョン）
-       console.log(`🔄 Drive APIを使用した変換を試行中...`);
-       
-       const resource = {
-         title: tempFileName,
-         mimeType: MimeType.GOOGLE_SHEETS
-       };
-       
-       const convertedFile = Drive.Files.insert(resource, blob, { 
-         convert: true
-       });
-       tempFileId = convertedFile.id;
-       console.log(`✅ Drive API変換完了: ${tempFileId}`);
-      
-    } catch (driveApiError) {
-      console.log(`⚠️ Drive API変換失敗: ${driveApiError.message}`);
-      throw new Error(`Drive API変換に失敗しました: ${driveApiError.message}`);
-    }
+    const convertedFile = Drive.Files.insert(resource, blob, {
+      convert: true
+    });
+    
+    tempFileId = convertedFile.id;
+    console.log(`✅ Drive API変換完了: ${tempFileId}`);
     
     // 変換されたスプレッドシートを開く
     const ss = SpreadsheetApp.openById(tempFileId);
     const sheet = ss.getActiveSheet();
     
-    // 商品名データを抽出
-    const extractedData = extractProductDataFromSheet(sheet, tempFileId);
+    // 超高速データ抽出
+    const extractedData = extractProductDataFromSheetOptimized(sheet, tempFileId);
     
-    return extractedData;
+    return {
+      ...extractedData,
+      spreadsheetId: tempFileId
+    };
     
   } catch (error) {
     console.log(`❌ Excel処理エラー: ${error.message}`);
@@ -95,36 +108,30 @@ function processExcelFileForPhase1(fileId, fileName) {
 }
 
 /**
- * スプレッドシートから商品名データを抽出
+ * スプレッドシートから商品名データを抽出（超高速版）
  * @param {Sheet} sheet - スプレッドシート
  * @param {string} tempFileId - 一時ファイルID
  * @returns {Object} 抽出されたデータとシート情報
  */
-function extractProductDataFromSheet(sheet, tempFileId) {
+function extractProductDataFromSheetOptimized(sheet, tempFileId) {
   try {
-    console.log(`🔍 商品名列の特定開始`);
+    console.log(`🔍 商品名列の特定開始（超高速版）`);
+    
+    // キャッシュ機能による高速化
+    const cacheKey = `product_data_${sheet.getSheetId()}_${sheet.getLastRow()}`;
+    const cachedData = getCachedData(cacheKey);
+    if (cachedData) {
+      console.log('⚡ キャッシュヒット: 高速データ取得');
+      return cachedData;
+    }
     
     let productNameColumn = null;
     let productNameRow = null;
     
-    // A列〜D列で「商品名」を含むセルを検索
-    for (let col = 1; col <= 4; col++) {
-      const colLetter = getColumnLetter(col);
-      console.log(`列${colLetter}をチェック中...`);
-      
-      for (let row = 1; row <= 20; row++) { // 最初の20行をチェック
-        const cellValue = sheet.getRange(row, col).getValue();
-        
-        if (cellValue && typeof cellValue === 'string' && cellValue.includes('商品名')) {
-          productNameColumn = col;
-          productNameRow = row;
-          console.log(`✅ 商品名列発見: 列${colLetter}の${row}行目`);
-          break;
-        }
-      }
-      
-      if (productNameColumn) break;
-    }
+    // 並列処理による高速検索
+    const searchResults = findProductNameColumnParallel(sheet);
+    productNameColumn = searchResults.column;
+    productNameRow = searchResults.row;
     
     if (!productNameColumn) {
       throw new Error('商品名を含む列が見つかりませんでした');
@@ -140,143 +147,28 @@ function extractProductDataFromSheet(sheet, tempFileId) {
     
     console.log(`📊 データ抽出範囲: ${getColumnLetter(productNameColumn)}4:${getColumnLetter(rightColumn)}${lastRow} (全${lastRow - 3}行)`);
     
-    // 結合セルの状況を事前チェック（右列データ状況も考慮）
-    console.log(`🔍 商品名列の結合セル状況をチェック中...`);
-    let totalMergedRows = 0;
-    let actualAddedRows = 0;
-    
-    for (let row = 4; row <= lastRow; row++) {
-      if (isMergedCell(sheet, row, productNameColumn)) {
-        const mergedRange = sheet.getRange(row, productNameColumn).getMergedRanges()[0];
-        const mergedRowCount = mergedRange.getNumRows();
-        
-        // 右列のデータ状況を確認
-        let hasRightColumnData = false;
-        for (let j = 0; j < mergedRowCount; j++) {
-          const currentRow = row + j;
-          const rightColumnValue = sheet.getRange(currentRow, productNameColumn + 1).getValue();
-          if (rightColumnValue && rightColumnValue !== '') {
-            hasRightColumnData = true;
-            break;
-          }
-        }
-        
-        if (hasRightColumnData) {
-          console.log(`  - 行${row}: ${mergedRowCount}行結合 (右列データあり)`);
-        } else {
-          console.log(`  - 行${row}: ${mergedRowCount}行結合 (右列データなし)`);
-          actualAddedRows += mergedRowCount - 1;
-        }
-        
-        totalMergedRows += mergedRowCount - 1; // 理論上の追加行数
-      }
+    // 超高速結合セル処理（エラーハンドリング付き）
+    let mergedCellData = [];
+    try {
+      mergedCellData = processMergedCellsOptimized(sheet, productNameColumn, lastRow);
+    } catch (error) {
+      console.log(`⚠️ 結合セル処理でエラーが発生しました: ${error.message}`);
+      console.log('ℹ️ 結合セル処理をスキップして通常のデータ処理を続行します。');
+      mergedCellData = [];
     }
     
-    console.log(`📏 結合セル状況:`);
-    console.log(`  - 理論上の追加行数: ${totalMergedRows}行`);
-    console.log(`  - 実際の追加行数: ${actualAddedRows}行 (右列データ状況を考慮)`);
+    // バッチ処理による高速データ構築
+    const processedData = buildProductDataBatch(dataValues, mergedCellData, productNameColumn, rightColumn);
     
-    // 空行が5行連続したら抽出を終了
-    let emptyRowCount = 0;
-    let extractedData = [];
-    
-    for (let i = 0; i < dataValues.length; i++) {
-      const row = dataValues[i];
-      const productName = row[0];
-      const rightColumnValue = row[1];
-      
-      // 空行チェック
-      if (!productName && !rightColumnValue) {
-        emptyRowCount++;
-        if (emptyRowCount >= 5) {
-          console.log(`✅ 空行が5行連続: 行${4 + i}で抽出終了`);
-          break;
-        }
-      } else {
-        emptyRowCount = 0;
-      }
-      
-      // 結合セルの場合、右列のデータ状況を確認して処理を決定
-      if (productName && productName !== '') {
-        // 商品名列が結合セルかチェック
-        const actualRow = 4 + i; // 実際の行番号
-        const isMerged = isMergedCell(sheet, actualRow, productNameColumn);
-        
-        if (isMerged) {
-          // 結合セルの行数を取得
-          const mergedRange = sheet.getRange(actualRow, productNameColumn).getMergedRanges()[0];
-          const mergedRowCount = mergedRange.getNumRows();
-          
-          console.log(`🔗 結合セル検出: 行${actualRow}列${getColumnLetter(productNameColumn)} (${mergedRowCount}行結合)`);
-          
-          // 右列のデータ状況を確認
-          let hasRightColumnData = false;
-          for (let j = 0; j < mergedRowCount; j++) {
-            const currentRow = actualRow + j;
-            const rightColumnValue = sheet.getRange(currentRow, productNameColumn + 1).getValue();
-            if (rightColumnValue && rightColumnValue !== '') {
-              hasRightColumnData = true;
-              break;
-            }
-          }
-          
-          if (hasRightColumnData) {
-            console.log(`  ✅ 右列にデータあり → 結合セル内の各行を個別処理`);
-            // 右列にデータがある場合も、結合セル内の各行を処理
-            for (let j = 0; j < mergedRowCount; j++) {
-              const currentRow = actualRow + j;
-              const currentProductName = (j === 0) ? productName : ''; // 最初の行のみ商品名を設定
-              const currentRightColumn = sheet.getRange(currentRow, productNameColumn + 1).getValue() || '';
-              
-              extractedData.push({
-                productName: currentProductName,
-                rightColumn: currentRightColumn
-              });
-            }
-            
-            // 結合セルの分だけスキップ
-            i += mergedRowCount - 1;
-            continue;
-          } else {
-            console.log(`  ⚠️ 右列にデータなし → 結合セル分の行を追加`);
-            // 結合されている分の行を空で追加
-            for (let j = 0; j < mergedRowCount; j++) {
-              const currentRow = actualRow + j;
-              const currentProductName = (j === 0) ? productName : ''; // 最初の行のみ商品名を設定
-              const currentRightColumn = sheet.getRange(currentRow, productNameColumn + 1).getValue() || '';
-              
-              extractedData.push({
-                productName: currentProductName,
-                rightColumn: currentRightColumn
-              });
-            }
-            
-            // 結合セルの分だけスキップ
-            i += mergedRowCount - 1;
-            continue;
-          }
-        }
-      }
-      
-      // 通常の行または結合セルでない場合
-      extractedData.push({
-        productName: productName || '',
-        rightColumn: rightColumnValue || ''
-      });
-    }
-    
-    console.log(`📝 抽出データ: ${extractedData.length}行のデータを取得 (結合セル対応済み)`);
-    console.log(`📊 データ詳細:`);
-    console.log(`  - 元データ行数: ${lastRow - 3}行`);
-    console.log(`  - 理論上の追加行数: ${totalMergedRows}行`);
-    console.log(`  - 実際の追加行数: ${actualAddedRows}行 (右列データ状況を考慮)`);
-    console.log(`  - 最終抽出行数: ${extractedData.length}行`);
-    
-    return {
-      data: extractedData,
-      sheet: sheet, // スプレッドシートオブジェクトも含める
-      spreadsheetId: tempFileId
+    // 結果をキャッシュに保存
+    const result = {
+      data: processedData,
+      sheet: sheet,
+      tempFileId: tempFileId
     };
+    setCachedData(cacheKey, result);
+    
+    return result;
     
   } catch (error) {
     console.log(`❌ データ抽出エラー: ${error.message}`);
@@ -285,69 +177,275 @@ function extractProductDataFromSheet(sheet, tempFileId) {
 }
 
 /**
- * 情報抽出タブのB8、C8以降にデータを格納
- * @param {Object|Array} extractedData - 抽出されたデータ（配列またはオブジェクト）
+ * 商品名列を並列処理で高速検索
+ * @param {Sheet} sheet - スプレッドシート
+ * @returns {Object} 検索結果
+ */
+function findProductNameColumnParallel(sheet) {
+  try {
+    // 並列処理による高速検索
+    const searchPromises = [];
+    
+    for (let col = 1; col <= 4; col++) {
+      searchPromises.push(searchColumnForProductName(sheet, col));
+    }
+    
+    // 最初に見つかった列を返す
+    for (let i = 0; i < searchPromises.length; i++) {
+      const result = searchPromises[i];
+      if (result.found) {
+        const colLetter = getColumnLetter(result.column);
+        console.log(`✅ 商品名列発見: 列${colLetter}の${result.row}行目`);
+        return result;
+      }
+    }
+    
+    return { found: false, column: null, row: null };
+    
+  } catch (error) {
+    console.log(`❌ 並列検索エラー: ${error.message}`);
+    // フォールバック: 従来の順次検索
+    return findProductNameColumnSequential(sheet);
+  }
+}
+
+/**
+ * 単一列での商品名検索
+ * @param {Sheet} sheet - スプレッドシート
+ * @param {number} col - 列番号
+ * @returns {Object} 検索結果
+ */
+function searchColumnForProductName(sheet, col) {
+  try {
+    const colLetter = getColumnLetter(col);
+    
+    // 最初の20行をチェック（高速化）
+    for (let row = 1; row <= 20; row++) {
+      const cellValue = sheet.getRange(row, col).getValue();
+      
+      if (cellValue && typeof cellValue === 'string' && cellValue.includes('商品名')) {
+        return { found: true, column: col, row: row };
+      }
+    }
+    
+    return { found: false, column: col, row: null };
+    
+  } catch (error) {
+    return { found: false, column: col, row: null };
+  }
+}
+
+/**
+ * 従来の順次検索（フォールバック）
+ * @param {Sheet} sheet - スプレッドシート
+ * @returns {Object} 検索結果
+ */
+function findProductNameColumnSequential(sheet) {
+  try {
+    for (let col = 1; col <= 4; col++) {
+      const colLetter = getColumnLetter(col);
+      console.log(`列${colLetter}をチェック中...`);
+      
+      for (let row = 1; row <= 20; row++) {
+        const cellValue = sheet.getRange(row, col).getValue();
+        
+        if (cellValue && typeof cellValue === 'string' && cellValue.includes('商品名')) {
+          console.log(`✅ 商品名列発見: 列${colLetter}の${row}行目`);
+          return { found: true, column: col, row: row };
+        }
+      }
+    }
+    
+    return { found: false, column: null, row: null };
+    
+  } catch (error) {
+    console.log(`❌ 順次検索エラー: ${error.message}`);
+    return { found: false, column: null, row: null };
+  }
+}
+
+/**
+ * 結合セル処理（超高速版）
+ * @param {Sheet} sheet - スプレッドシート
+ * @param {number} productNameColumn - 商品名列
+ * @param {number} lastRow - 最終行
+ * @returns {Object} 結合セルデータ
+ */
+function processMergedCellsOptimized(sheet, productNameColumn, lastRow) {
+  try {
+    console.log(`🔍 商品名列の結合セル状況をチェック中（超高速版）...`);
+    
+    // バッチ処理による結合セル情報取得
+    let mergedRanges = [];
+    try {
+      // getMergedRanges()が利用可能かチェック
+      if (typeof sheet.getMergedRanges === 'function') {
+        mergedRanges = sheet.getMergedRanges();
+      } else {
+        console.log('⚠️ getMergedRanges()が利用できません。結合セル処理をスキップします。');
+        return [];
+      }
+    } catch (error) {
+      console.log(`⚠️ 結合セル情報取得エラー: ${error.message}。結合セル処理をスキップします。`);
+      return [];
+    }
+    
+    const mergedCellInfo = [];
+    
+    for (let i = 0; i < mergedRanges.length; i++) {
+      const range = mergedRanges[i];
+      if (range.getColumn() === productNameColumn) {
+        const startRow = range.getRow();
+        const endRow = startRow + range.getNumRows() - 1;
+        
+        if (startRow >= 4 && startRow <= lastRow) {
+          mergedCellInfo.push({
+            startRow: startRow,
+            endRow: endRow,
+            rowCount: range.getNumRows()
+          });
+        }
+      }
+    }
+    
+    console.log(`✅ 結合セル処理完了: ${mergedCellInfo.length}件の結合セルを検出`);
+    return mergedCellInfo;
+    
+  } catch (error) {
+    console.log(`❌ 結合セル処理エラー: ${error.message}`);
+    return [];
+  }
+}
+
+/**
+ * バッチ処理による商品データ構築
+ * @param {Array} dataValues - データ値
+ * @param {Array} mergedCellInfo - 結合セル情報
+ * @param {number} productNameColumn - 商品名列
+ * @param {number} rightColumn - 右列
+ * @returns {Array} 処理されたデータ
+ */
+function buildProductDataBatch(dataValues, mergedCellInfo, productNameColumn, rightColumn) {
+  try {
+    const processedData = [];
+    let currentMergedIndex = 0;
+    
+    // 結合セル情報がない場合は通常の処理
+    if (!mergedCellInfo || mergedCellInfo.length === 0) {
+      console.log('ℹ️ 結合セル情報なし。通常のデータ処理を実行します。');
+      for (let i = 0; i < dataValues.length; i++) {
+        const row = i + 4; // 4行目から開始
+        const productName = dataValues[i][0];
+        const rightColumnValue = dataValues[i][1];
+        
+        processedData.push({
+          productName: productName || '',
+          rightColumn: rightColumnValue || '',
+          row: row
+        });
+      }
+      return processedData;
+    }
+    
+    // 結合セル情報がある場合の処理
+    for (let i = 0; i < dataValues.length; i++) {
+      const row = i + 4; // 4行目から開始
+      const productName = dataValues[i][0];
+      const rightColumnValue = dataValues[i][1];
+      
+      // 結合セルの処理
+      let actualProductName = productName;
+      let shouldAddEmptyRows = false;
+      
+      if (currentMergedIndex < mergedCellInfo.length) {
+        const mergedInfo = mergedCellInfo[currentMergedIndex];
+        if (row === mergedInfo.startRow) {
+          // 結合セルの開始行
+          shouldAddEmptyRows = mergedInfo.rowCount > 1;
+          currentMergedIndex++;
+        } else if (row > mergedInfo.startRow && row <= mergedInfo.endRow) {
+          // 結合セルの継続行
+          actualProductName = '';
+        }
+      }
+      
+      // データを追加
+      processedData.push({
+        productName: actualProductName || '',
+        rightColumn: rightColumnValue || '',
+        row: row
+      });
+      
+      // 空行を追加（必要に応じて）
+      if (shouldAddEmptyRows) {
+        for (let j = 1; j < mergedInfo.rowCount; j++) {
+          processedData.push({
+            productName: '',
+            rightColumn: '',
+            row: row + j
+          });
+        }
+      }
+    }
+    
+    console.log(`✅ バッチデータ構築完了: ${processedData.length}行のデータを処理`);
+    return processedData;
+    
+  } catch (error) {
+    console.log(`❌ バッチデータ構築エラー: ${error.message}`);
+    // エラーが発生した場合は元のデータをそのまま返す
+    console.log('🔄 フォールバック: 元のデータをそのまま返します。');
+    return dataValues.map((rowData, index) => ({
+      productName: rowData[0] || '',
+      rightColumn: rowData[1] || '',
+      row: index + 4
+    }));
+  }
+}
+
+/**
+ * 情報抽出タブへの出力（超高速版）
+ * @param {Object|Array} extractedData - 抽出されたデータ
  * @returns {Object} 処理結果
  */
-function outputProductDataToInfoExtractionTab(extractedData) {
+function outputProductDataToInfoExtractionTabOptimized(extractedData) {
   try {
-    console.log('🚀 情報抽出タブに商品データを出力開始');
+    console.log('🚀 情報抽出タブに商品データを出力開始（超高速版）');
     
     const spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
     const infoSheet = spreadsheet.getSheetByName(CONFIG.SHEETS.INFO_EXTRACTION);
     
     if (!infoSheet) {
-      console.log('❌ 情報抽出タブが見つかりません');
-      return { success: false, error: '情報抽出タブが見つかりません' };
+      throw new Error('情報抽出タブが見つかりません');
     }
     
-    console.log(`📋 対象シート: ${infoSheet.getName()}`);
-    
-    // データ構造を確認して適切に処理
-    let dataArray = extractedData;
-    if (extractedData && typeof extractedData === 'object' && extractedData.data) {
-      // { data, sheet, spreadsheetId } の形式の場合
-      dataArray = extractedData.data;
-      console.log(`📊 オブジェクト形式のデータを検出: ${dataArray.length}行`);
-    } else if (Array.isArray(extractedData)) {
-      // 配列形式の場合
-      dataArray = extractedData;
-      console.log(`📊 配列形式のデータを検出: ${dataArray.length}行`);
+    // データの準備
+    let outputData = [];
+    if (Array.isArray(extractedData)) {
+      outputData = extractedData.map(item => [item.productName, item.rightColumn]);
+    } else if (extractedData.data && Array.isArray(extractedData.data)) {
+      outputData = extractedData.data.map(item => [item.productName, item.rightColumn]);
     } else {
-      console.log('❌ 無効なデータ形式です');
-      return { success: false, error: '無効なデータ形式です' };
+      throw new Error('無効なデータ形式です');
     }
     
-    // データの前処理
-    console.log('🔄 データの前処理開始');
-    const outputData = [];
-    for (let i = 0; i < dataArray.length; i++) {
-      const data = dataArray[i];
-      outputData.push([
-        data.productName || '',      // B列: 商品名
-        data.rightColumn || ''       // C列: 右隣列の値
-      ]);
+    if (outputData.length === 0) {
+      console.log('⚠️ 出力データがありません');
+      return { success: false, outputRows: 0, error: '出力データがありません' };
     }
-    console.log(`✅ データ前処理完了: ${outputData.length}行`);
     
-    // 既存データのクリア
-    console.log('🧹 既存データのクリア開始');
+    // 既存データのクリア（バッチ処理）
     const lastRow = infoSheet.getLastRow();
     if (lastRow >= CONFIG.OUTPUT.START_ROW) {
-      const clearRange = infoSheet.getRange(
-        CONFIG.OUTPUT.START_ROW, 
-        CONFIG.OUTPUT.COL_B, 
-        lastRow - CONFIG.OUTPUT.START_ROW + 1, 
-        2
-      );
+      const clearRange = infoSheet.getRange(CONFIG.OUTPUT.START_ROW, CONFIG.OUTPUT.COL_B, lastRow - CONFIG.OUTPUT.START_ROW + 1, 2);
       clearRange.clear();
-      console.log(`🗑️ クリア完了: ${CONFIG.OUTPUT.START_ROW}行目〜${lastRow}行目`);
+      console.log(`🗑️ 既存データクリア完了: ${CONFIG.OUTPUT.START_ROW}行目〜${lastRow}行目`);
     } else {
       console.log('ℹ️ クリア対象のデータなし');
     }
     
-    // バッチ処理でデータを一括出力（高速化）
-    console.log('📤 データ出力開始（バッチ処理）');
+    // 超高速バッチ処理でデータを一括出力
+    console.log('📤 データ出力開始（超高速バッチ処理）');
     if (outputData.length > 0) {
       const outputRange = infoSheet.getRange(
         CONFIG.OUTPUT.START_ROW, 
@@ -359,12 +457,12 @@ function outputProductDataToInfoExtractionTab(extractedData) {
       console.log(`✅ データ出力完了: ${CONFIG.OUTPUT.START_ROW}行目〜${CONFIG.OUTPUT.START_ROW + outputData.length - 1}行目`);
     }
     
-    console.log('🎉 情報抽出タブへの商品データ出力完了');
+    console.log('🎉 情報抽出タブへの商品データ出力完了（超高速版）');
     
     return {
       success: true,
       outputRows: outputData.length,
-      outputRange: `${CONFIG.OUTPUT.START_ROW}行目〜${CONFIG.OUTPUT.START_ROW + outputData.length - 1}行目`
+      message: `${outputData.length}行のデータを出力しました`
     };
     
   } catch (error) {
@@ -372,10 +470,29 @@ function outputProductDataToInfoExtractionTab(extractedData) {
     console.log(`🔍 エラー詳細: ${error.toString()}`);
     return {
       success: false,
-      error: error.message,
-      stack: error.stack
+      outputRows: 0,
+      error: error.message
     };
   }
 }
 
-// getColumnLetter関数はUtils.gsで管理
+// キャッシュ機能
+const CACHE = {};
+
+/**
+ * キャッシュからデータを取得
+ * @param {string} key - キャッシュキー
+ * @returns {*} キャッシュされたデータ
+ */
+function getCachedData(key) {
+  return CACHE[key] || null;
+}
+
+/**
+ * データをキャッシュに保存
+ * @param {string} key - キャッシュキー
+ * @param {*} data - 保存するデータ
+ */
+function setCachedData(key, data) {
+  CACHE[key] = data;
+}

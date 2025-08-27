@@ -7,7 +7,7 @@
  * 1. B列・C列の値からDo項目を自動判定
  * 2. 部分検索による柔軟なマッチング
  * 3. 優先順位を考慮した項目選択（旧・新の場合は新を優先）
- * 4. Do書き出し用タブへの出力
+ * 4. 情報抽出タブのA列への出力
  */
 
 /**
@@ -35,7 +35,7 @@ function executePhase3(sheet) {
     // Do項目との紐付けを実行
     const mappingResults = performDoMapping(extractedData);
     
-    // 情報抽出タブのA列にDo項目を出力
+    // 情報抽出タブのA列に出力
     const outputResult = outputToInfoExtractionTab(mappingResults);
     
     console.log('=== Phase 3: Do書き出し項目との紐付け完了 ===');
@@ -43,7 +43,7 @@ function executePhase3(sheet) {
     return {
       success: true,
       processedRows: extractedData.length,
-      mappedItems: mappingResults.length,
+      mappedItems: mappingResults.filter(r => r.mapped).length,
       outputResult: outputResult
     };
     
@@ -133,30 +133,25 @@ function performDoMapping(extractedData) {
       // 商品名と右隣列の値を組み合わせて検索
       const searchText = data.combinedText;
       
-      // 最適なDo項目を検索（新・旧の判定付き）
-      const mappingResult = findBestDoMapping(searchText);
+      // 最適なDo項目を検索
+      const doItem = findBestDoMapping(searchText);
       
-      if (mappingResult) {
+      if (doItem) {
         mappingResults.push({
           ...data,
-          doItem: mappingResult.doItem,
-          isOld: mappingResult.isOld,
-          mapped: true,
-          searchText: searchText
+          doItem: doItem,
+          mapped: true
         });
         mappedCount++;
         
         if (CONFIG.PERFORMANCE.LOG_DETAIL) {
-          const oldLabel = mappingResult.isOld ? ' (旧項目)' : '';
-          console.log(`✅ マッピング成功: 行${data.row} "${searchText}" → "${mappingResult.doItem}"${oldLabel}`);
+          console.log(`✅ マッピング成功: 行${data.row} "${searchText}" → "${doItem}"`);
         }
       } else {
         mappingResults.push({
           ...data,
           doItem: null,
-          isOld: false,
-          mapped: false,
-          searchText: searchText
+          mapped: false
         });
         unmappedCount++;
         
@@ -176,6 +171,126 @@ function performDoMapping(extractedData) {
   } catch (error) {
     console.log(`❌ マッピング処理エラー: ${error.message}`);
     throw error;
+  }
+}
+
+/**
+ * 最適なDo項目を検索
+ * @param {string} searchText - 検索テキスト
+ * @returns {string|null} マッピング結果
+ */
+function findBestDoMapping(searchText) {
+  try {
+    if (!searchText || !CONFIG.DO_MAPPING) {
+      return null;
+    }
+    
+    let bestMatch = null;
+    let bestScore = 0;
+    let isOld = false;
+    
+    // 各マッピングルールをチェック
+    for (const [doItem, mappingRule] of Object.entries(CONFIG.DO_MAPPING)) {
+      // メインキーワードでマッチング（AND検索）
+      let hasMainKeywordMatch = false;
+      let keywordScore = 0;
+      
+      if (mappingRule.keywords && mappingRule.keywords.length > 0) {
+        // すべてのキーワードが含まれているかチェック（AND検索）
+        const allKeywordsMatch = mappingRule.keywords.every(keyword => 
+          searchText.toLowerCase().includes(keyword.toLowerCase())
+        );
+        
+        if (allKeywordsMatch) {
+          hasMainKeywordMatch = true;
+          keywordScore = mappingRule.keywords.length;
+        }
+      }
+      
+      // fallbackKeywordsでマッチング（OR検索）
+      let hasFallbackMatch = false;
+      let fallbackScore = 0;
+      
+      if (mappingRule.fallbackKeywords) {
+        for (const fallbackKeyword of mappingRule.fallbackKeywords) {
+          if (searchText.toLowerCase().includes(fallbackKeyword.toLowerCase())) {
+            hasFallbackMatch = true;
+            fallbackScore += 1;
+          }
+        }
+      }
+      
+      // マッチング判定
+      if (hasMainKeywordMatch || hasFallbackMatch) {
+        // 新・旧の判定
+        let isNew = false;
+        let isOldItem = false;
+        
+        if (mappingRule.fallbackKeywords) {
+          for (const fallbackKeyword of mappingRule.fallbackKeywords) {
+            if (searchText.toLowerCase().includes(fallbackKeyword.toLowerCase())) {
+              if (fallbackKeyword.includes('(新)')) {
+                isNew = true;
+              } else if (fallbackKeyword.includes('(旧)')) {
+                isOldItem = true;
+              }
+            }
+          }
+        }
+        
+        // 部分一致による新・旧判定も追加
+        if (searchText.toLowerCase().includes('(新)') || 
+            searchText.toLowerCase().includes('新') ||
+            searchText.toLowerCase().includes('new')) {
+          isNew = true;
+        }
+        if (searchText.toLowerCase().includes('(旧)') || 
+            searchText.toLowerCase().includes('旧') ||
+            searchText.toLowerCase().includes('old')) {
+          isOldItem = true;
+        }
+        
+        // 新・旧の判定結果を決定
+        let finalIsOld = false;
+        if (isOldItem && !isNew) {
+          finalIsOld = true;
+        } else if (isNew && !isOldItem) {
+          finalIsOld = false;
+        } else if (isNew && isOldItem) {
+          // 新・旧両方の場合は設定された優先順位に従う
+          finalIsOld = mappingRule.priority !== 'new';
+        } else {
+          // 新・旧の判定なしの場合は新項目として扱う
+          finalIsOld = false;
+        }
+        
+        // スコア計算（メインキーワードの方が高スコア）
+        const totalScore = (keywordScore * 2) + fallbackScore;
+        
+        if (totalScore > bestScore) {
+          bestScore = totalScore;
+          bestMatch = doItem;
+          isOld = finalIsOld;
+        }
+      }
+    }
+    
+    if (bestMatch) {
+      // 旧項目の場合はnullを返す（ラベルを付けない）
+      if (isOld) {
+        console.log(`🔍 Do項目マッチング: "${searchText}" → "${bestMatch}" (旧項目のためラベルを付けません)`);
+        return null;
+      }
+      
+      console.log(`🔍 Do項目マッチング: "${searchText}" → "${bestMatch}" (スコア: ${bestScore})`);
+      return bestMatch;
+    }
+    
+    return null;
+    
+  } catch (error) {
+    console.log(`❌ Do項目検索エラー: ${error.message}`);
+    return null;
   }
 }
 
@@ -212,29 +327,28 @@ function outputToInfoExtractionTab(mappingResults) {
     // A列にDo項目を出力
     console.log('📤 A列にDo項目を出力開始');
     if (mappingResults.length > 0) {
-      for (let i = 0; i < mappingResults.length; i++) {
-        const result = mappingResults[i];
-        const row = result.row;
-        
-        // 旧項目にはラベルを付けない
-        if (result.isOld) {
-          console.log(`⚠️ 旧項目のためラベルを付けません: 行${row} "${result.searchText}"`);
-          continue;
-        }
-        
-        // Do項目をA列に出力
+      let outputCount = 0;
+      
+      for (const result of mappingResults) {
         if (result.doItem) {
+          const row = result.row;
           sheet.getRange(row, 1).setValue(result.doItem);
-          console.log(`✅ A列にDo項目を出力: 行${row} "${result.doItem}"`);
+          outputCount++;
+          
+          if (CONFIG.PERFORMANCE.LOG_DETAIL) {
+            console.log(`✅ A列にDo項目を出力: 行${row} "${result.doItem}"`);
+          }
         }
       }
+      
+      console.log(`✅ 出力完了: ${outputCount}件のDo項目を出力`);
     }
     
     console.log('🎉 情報抽出タブのA列への出力完了');
     
     return {
       success: true,
-      outputRows: mappingResults.filter(r => !r.isOld && r.doItem).length,
+      outputRows: mappingResults.filter(r => r.doItem).length,
       outputRange: `A${CONFIG.OUTPUT.START_ROW}行目〜A${CONFIG.OUTPUT.START_ROW + mappingResults.length - 1}行目`
     };
     
