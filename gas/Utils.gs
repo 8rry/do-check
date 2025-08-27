@@ -850,52 +850,71 @@ function matchKeywords(searchText, keywords) {
 }
 
 /**
- * 優先順位を考慮したキーワードマッチング
+ * 部分一致による新・旧の判別付きキーワードマッチング
  * @param {string} searchText - 検索対象のテキスト
  * @param {Object} mappingRule - マッピングルール
- * @returns {boolean} マッチするかどうか
+ * @returns {Object} マッチ結果 { matched: boolean, isOld: boolean }
  */
-function matchKeywordsWithPriority(searchText, mappingRule) {
+function matchKeywordsWithOldNewCheck(searchText, mappingRule) {
   try {
     if (!searchText || !mappingRule) {
-      return false;
+      return { matched: false, isOld: false };
     }
     
     // メインキーワードでマッチング
     if (mappingRule.keywords && matchKeywords(searchText, mappingRule.keywords)) {
-      return true;
+      return { matched: true, isOld: false };
     }
     
-    // フォールバックキーワードでマッチング
-    if (mappingRule.fallbackKeywords && mappingRule.fallbackKeywords.length > 0) {
-      if (mappingRule.priority === 'new') {
-        // 新を優先する場合、新を含むキーワードのみをチェック
-        const newKeywords = mappingRule.fallbackKeywords.filter(keyword => 
-          keyword.toString().toLowerCase().includes('新')
-        );
-        if (newKeywords.length > 0 && matchKeywords(searchText, newKeywords)) {
-          return true;
-        }
-      } else {
-        // 通常のフォールバックキーワードマッチング
-        if (matchKeywords(searchText, mappingRule.fallbackKeywords)) {
-          return true;
+    // 新・旧の判定を行う
+    let isNew = false;
+    let isOld = false;
+    
+    // 新キーワードで部分一致チェック
+    if (mappingRule.newKeywords && mappingRule.newKeywords.length > 0) {
+      for (const keyword of mappingRule.newKeywords) {
+        if (searchText.toLowerCase().includes(keyword.toLowerCase())) {
+          isNew = true;
+          break;
         }
       }
     }
     
-    return false;
+    // 旧キーワードで部分一致チェック
+    if (mappingRule.oldKeywords && mappingRule.oldKeywords.length > 0) {
+      for (const keyword of mappingRule.oldKeywords) {
+        if (searchText.toLowerCase().includes(keyword.toLowerCase())) {
+          isOld = true;
+          break;
+        }
+      }
+    }
+    
+    // 新・旧の判定結果を返す
+    if (isNew && !isOld) {
+      // 新のみの場合
+      return { matched: true, isOld: false };
+    } else if (isOld && !isNew) {
+      // 旧のみの場合
+      return { matched: true, isOld: true };
+    } else if (isNew && isOld) {
+      // 新・旧両方の場合（新を優先）
+      return { matched: true, isOld: false };
+    } else {
+      // 新・旧の判定なし
+      return { matched: false, isOld: false };
+    }
     
   } catch (error) {
-    console.log(`❌ 優先順位付きキーワードマッチングエラー: ${error.message}`);
-    return false;
+    console.log(`❌ 新・旧チェック付きキーワードマッチングエラー: ${error.message}`);
+    return { matched: false, isOld: false };
   }
 }
 
 /**
- * 最適なDo項目を検索
+ * 最適なDo項目を検索（新・旧の判定付き）
  * @param {string} searchText - 検索対象のテキスト
- * @returns {string|null} マッチするDo項目名、マッチしない場合はnull
+ * @returns {Object|null} マッチ結果 { doItem: string, isOld: boolean }、マッチしない場合はnull
  */
 function findBestDoMapping(searchText) {
   try {
@@ -905,25 +924,35 @@ function findBestDoMapping(searchText) {
     
     let bestMatch = null;
     let bestScore = 0;
+    let isOld = false;
     
     // 各マッピングルールをチェック
     for (const [doItem, mappingRule] of Object.entries(CONFIG.DO_MAPPING)) {
-      if (matchKeywordsWithPriority(searchText, mappingRule)) {
+      const matchResult = matchKeywordsWithOldNewCheck(searchText, mappingRule);
+      
+      if (matchResult.matched) {
         // キーワード数が多いほど高スコア（より具体的なマッチング）
         const score = mappingRule.keywords ? mappingRule.keywords.length : 0;
         
         if (score > bestScore) {
           bestScore = score;
           bestMatch = doItem;
-        }
+          isOld = matchResult.isOld;
         }
       }
-    
-    if (bestMatch) {
-      console.log(`🔍 Do項目マッチング: "${searchText}" → "${bestMatch}" (スコア: ${bestScore})`);
     }
     
-    return bestMatch;
+    if (bestMatch) {
+      const oldLabel = isOld ? ' (旧項目)' : '';
+      console.log(`🔍 Do項目マッチング: "${searchText}" → "${bestMatch}"${oldLabel} (スコア: ${bestScore})`);
+      
+      return {
+        doItem: bestMatch,
+        isOld: isOld
+      };
+    }
+    
+    return null;
     
   } catch (error) {
     console.log(`❌ Do項目検索エラー: ${error.message}`);

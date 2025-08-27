@@ -35,8 +35,8 @@ function executePhase3(sheet) {
     // Do項目との紐付けを実行
     const mappingResults = performDoMapping(extractedData);
     
-    // Do書き出し用タブに出力
-    const outputResult = outputToDoExportTab(mappingResults);
+    // 情報抽出タブのA列にDo項目を出力
+    const outputResult = outputToInfoExtractionTab(mappingResults);
     
     console.log('=== Phase 3: Do書き出し項目との紐付け完了 ===');
     
@@ -133,25 +133,30 @@ function performDoMapping(extractedData) {
       // 商品名と右隣列の値を組み合わせて検索
       const searchText = data.combinedText;
       
-      // 最適なDo項目を検索
-      const doItem = findBestDoMapping(searchText);
+      // 最適なDo項目を検索（新・旧の判定付き）
+      const mappingResult = findBestDoMapping(searchText);
       
-      if (doItem) {
+      if (mappingResult) {
         mappingResults.push({
           ...data,
-          doItem: doItem,
-          mapped: true
+          doItem: mappingResult.doItem,
+          isOld: mappingResult.isOld,
+          mapped: true,
+          searchText: searchText
         });
         mappedCount++;
         
         if (CONFIG.PERFORMANCE.LOG_DETAIL) {
-          console.log(`✅ マッピング成功: 行${data.row} "${searchText}" → "${doItem}"`);
+          const oldLabel = mappingResult.isOld ? ' (旧項目)' : '';
+          console.log(`✅ マッピング成功: 行${data.row} "${searchText}" → "${mappingResult.doItem}"${oldLabel}`);
         }
       } else {
         mappingResults.push({
           ...data,
           doItem: null,
-          mapped: false
+          isOld: false,
+          mapped: false,
+          searchText: searchText
         });
         unmappedCount++;
         
@@ -175,70 +180,66 @@ function performDoMapping(extractedData) {
 }
 
 /**
- * Do書き出し用タブに出力
+ * 情報抽出タブのA列にDo項目を出力
  * @param {Array} mappingResults - マッピング結果
  * @returns {Object} 出力結果
  */
-function outputToDoExportTab(mappingResults) {
+function outputToInfoExtractionTab(mappingResults) {
   try {
-    console.log('📤 Do書き出し用タブへの出力開始');
+    console.log('📤 情報抽出タブのA列にDo項目を出力開始');
     
     const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-    const sheet = ss.getSheetByName(CONFIG.SHEETS.DO_EXPORT);
+    const sheet = ss.getSheetByName(CONFIG.SHEETS.INFO_EXTRACTION);
     
     if (!sheet) {
-      throw new Error('Do書き出し用タブが見つかりません');
+      throw new Error('情報抽出タブが見つかりません');
     }
     
-    // 既存データのクリア
-    console.log('🧹 既存データのクリア開始');
+    // 既存のA列データをクリア（8行目から）
+    console.log('🧹 既存のA列データをクリア開始');
     const lastRow = sheet.getLastRow();
-    if (lastRow >= CONFIG.CELLS.MAPPING_START_ROW) {
+    if (lastRow >= CONFIG.OUTPUT.START_ROW) {
       const clearRange = sheet.getRange(
-        CONFIG.CELLS.MAPPING_START_ROW, 
-        1, // A列から
-        lastRow - CONFIG.CELLS.MAPPING_START_ROW + 1, 
-        3  // A列〜C列
+        CONFIG.OUTPUT.START_ROW, 
+        1, // A列
+        lastRow - CONFIG.OUTPUT.START_ROW + 1, 
+        1  // A列のみ
       );
       clearRange.clear();
-      console.log(`🗑️ クリア完了: ${CONFIG.CELLS.MAPPING_START_ROW}行目〜${lastRow}行目`);
+      console.log(`🗑️ A列クリア完了: ${CONFIG.OUTPUT.START_ROW}行目〜${lastRow}行目`);
     }
     
-    // ヘッダー行の設定
-    console.log('📝 ヘッダー行の設定');
-    const headerRange = sheet.getRange(CONFIG.CELLS.MAPPING_START_ROW, 1, 1, 3);
-    headerRange.setValues([['Do項目', '商品名', '右隣列の値']]);
-    
-    // データの出力
-    console.log('📤 データ出力開始');
+    // A列にDo項目を出力
+    console.log('📤 A列にDo項目を出力開始');
     if (mappingResults.length > 0) {
-      const outputData = mappingResults.map(result => [
-        result.doItem || '',           // A列: Do項目
-        result.productName || '',      // B列: 商品名
-        result.rightColumn || ''       // C列: 右隣列の値
-      ]);
-      
-      const outputRange = sheet.getRange(
-        CONFIG.CELLS.MAPPING_START_ROW + 1, 
-        1, 
-        outputData.length, 
-        3
-      );
-      outputRange.setValues(outputData);
-      
-      console.log(`✅ データ出力完了: ${CONFIG.CELLS.MAPPING_START_ROW + 1}行目〜${CONFIG.CELLS.MAPPING_START_ROW + outputData.length}行目`);
+      for (let i = 0; i < mappingResults.length; i++) {
+        const result = mappingResults[i];
+        const row = result.row;
+        
+        // 旧項目にはラベルを付けない
+        if (result.isOld) {
+          console.log(`⚠️ 旧項目のためラベルを付けません: 行${row} "${result.searchText}"`);
+          continue;
+        }
+        
+        // Do項目をA列に出力
+        if (result.doItem) {
+          sheet.getRange(row, 1).setValue(result.doItem);
+          console.log(`✅ A列にDo項目を出力: 行${row} "${result.doItem}"`);
+        }
+      }
     }
     
-    console.log('🎉 Do書き出し用タブへの出力完了');
+    console.log('🎉 情報抽出タブのA列への出力完了');
     
     return {
       success: true,
-      outputRows: mappingResults.length,
-      outputRange: `${CONFIG.CELLS.MAPPING_START_ROW + 1}行目〜${CONFIG.CELLS.MAPPING_START_ROW + mappingResults.length}行目`
+      outputRows: mappingResults.filter(r => !r.isOld && r.doItem).length,
+      outputRange: `A${CONFIG.OUTPUT.START_ROW}行目〜A${CONFIG.OUTPUT.START_ROW + mappingResults.length - 1}行目`
     };
     
   } catch (error) {
-    console.log(`❌ Do書き出し用タブへの出力エラー: ${error.message}`);
+    console.log(`❌ 情報抽出タブのA列への出力エラー: ${error.message}`);
     console.log(`🔍 エラー詳細: ${error.toString()}`);
     return {
       success: false,

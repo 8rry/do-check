@@ -17,7 +17,7 @@ function executePhase1(fileId, fileName) {
     const extractedData = processExcelFileForPhase1(fileId, fileName);
     
     // 情報抽出タブに出力（dataプロパティを渡す）
-    const result = outputToInfoExtractionTab(extractedData);
+    const result = outputProductDataToInfoExtractionTab(extractedData);
     
     if (result.success) {
       console.log(`✅ 情報抽出タブへの出力完了: ${result.outputRows}行`);
@@ -299,9 +299,9 @@ function extractProductDataFromSheet(sheet, tempFileId) {
  * @param {Object|Array} extractedData - 抽出されたデータ（配列またはオブジェクト）
  * @returns {Object} 処理結果
  */
-function outputToInfoExtractionTab(extractedData) {
+function outputProductDataToInfoExtractionTab(extractedData) {
   try {
-    console.log('🚀 情報抽出タブへの出力開始');
+    console.log('🚀 情報抽出タブに商品データを出力開始');
     
     const spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
     const infoSheet = spreadsheet.getSheetByName(CONFIG.SHEETS.INFO_EXTRACTION);
@@ -369,7 +369,7 @@ function outputToInfoExtractionTab(extractedData) {
       console.log(`✅ データ出力完了: ${CONFIG.OUTPUT.START_ROW}行目〜${CONFIG.OUTPUT.START_ROW + outputData.length - 1}行目`);
     }
     
-    console.log('🎉 情報抽出タブへの出力完了');
+    console.log('🎉 情報抽出タブへの商品データ出力完了');
     
     return {
       success: true,
@@ -378,7 +378,7 @@ function outputToInfoExtractionTab(extractedData) {
     };
     
   } catch (error) {
-    console.log(`❌ 情報抽出タブへの出力エラー: ${error.message}`);
+    console.log(`❌ 情報抽出タブへの商品データ出力エラー: ${error.message}`);
     console.log(`🔍 エラー詳細: ${error.toString()}`);
     return {
       success: false,
