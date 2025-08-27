@@ -48,6 +48,19 @@ function main() {
     console.log(`  - 処理行数: ${phase3Result.processedRows}行`);
     console.log(`  - マッピング成功: ${phase3Result.mappedItems}件`);
     
+    // 一時ファイルの削除（最終処理）
+    console.log('🗑️ 一時ファイル削除開始');
+    try {
+      const cleanupResult = cleanupTempFiles(phase1Result.spreadsheetId);
+      if (cleanupResult.success) {
+        console.log(`🗑️ 一時ファイル削除完了: ${cleanupResult.deletedFiles}件`);
+      } else {
+        console.log(`⚠️ 一時ファイル削除でエラー: ${cleanupResult.error}`);
+      }
+    } catch (cleanupError) {
+      console.log(`⚠️ 一時ファイル削除でエラーが発生しましたが、処理は継続します: ${cleanupError.message}`);
+    }
+    
     console.log('=== 処理完了 ===');
     
   } catch (error) {

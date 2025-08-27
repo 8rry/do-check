@@ -91,16 +91,6 @@ function processExcelFileForPhase1(fileId, fileName) {
     }
     
     throw error;
-  } finally {
-    // 一時ファイルを削除
-    if (tempFileId) {
-      try {
-        DriveApp.getFileById(tempFileId).setTrashed(true);
-        console.log(`🗑️ 一時ファイルを削除: ${tempFileId}`);
-      } catch (deleteError) {
-        console.log(`⚠️ 一時ファイル削除エラー: ${deleteError.toString()}`);
-      }
-    }
   }
 }
 

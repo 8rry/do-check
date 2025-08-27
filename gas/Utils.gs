@@ -862,8 +862,9 @@ function matchKeywordsWithOldNewCheck(searchText, mappingRule) {
     }
     
     // メインキーワードでマッチング
+    let hasMainKeywordMatch = false;
     if (mappingRule.keywords && matchKeywords(searchText, mappingRule.keywords)) {
-      return { matched: true, isOld: false };
+      hasMainKeywordMatch = true;
     }
     
     // 新・旧の判定を行う
@@ -891,18 +892,37 @@ function matchKeywordsWithOldNewCheck(searchText, mappingRule) {
     }
     
     // 新・旧の判定結果を返す
-    if (isNew && !isOld) {
-      // 新のみの場合
-      return { matched: true, isOld: false };
-    } else if (isOld && !isNew) {
-      // 旧のみの場合
-      return { matched: true, isOld: true };
-    } else if (isNew && isOld) {
-      // 新・旧両方の場合（新を優先）
-      return { matched: true, isOld: false };
+    if (hasMainKeywordMatch) {
+      // メインキーワードでマッチした場合、新・旧の判定も行う
+      if (isOld && !isNew) {
+        // 旧のみの場合
+        console.log(`🔍 新・旧判定: メインキーワードマッチ + 旧キーワード検出 → 旧項目として判定`);
+        return { matched: true, isOld: true };
+      } else {
+        // 新がある場合または新・旧の判定なしの場合
+        const reason = isNew ? '新キーワード検出' : '新・旧キーワードなし';
+        console.log(`🔍 新・旧判定: メインキーワードマッチ + ${reason} → 新項目として判定`);
+        return { matched: true, isOld: false };
+      }
     } else {
-      // 新・旧の判定なし
-      return { matched: false, isOld: false };
+      // メインキーワードでマッチしない場合
+      if (isNew && !isOld) {
+        // 新のみの場合
+        console.log(`🔍 新・旧判定: 新キーワードのみ検出 → 新項目として判定`);
+        return { matched: true, isOld: false };
+      } else if (isOld && !isNew) {
+        // 旧のみの場合
+        console.log(`🔍 新・旧判定: 旧キーワードのみ検出 → 旧項目として判定`);
+        return { matched: true, isOld: true };
+      } else if (isNew && isOld) {
+        // 新・旧両方の場合（新を優先）
+        console.log(`🔍 新・旧判定: 新・旧両方のキーワード検出 → 新を優先して新項目として判定`);
+        return { matched: true, isOld: false };
+      } else {
+        // 新・旧の判定なし
+        console.log(`🔍 新・旧判定: 新・旧のキーワードなし → マッチなし`);
+        return { matched: false, isOld: false };
+      }
     }
     
   } catch (error) {
@@ -944,7 +964,8 @@ function findBestDoMapping(searchText) {
     
     if (bestMatch) {
       const oldLabel = isOld ? ' (旧項目)' : '';
-      console.log(`🔍 Do項目マッチング: "${searchText}" → "${bestMatch}"${oldLabel} (スコア: ${bestScore})`);
+      const newOldInfo = isOld ? ' [旧項目として判定]' : ' [新項目として判定]';
+      console.log(`🔍 Do項目マッチング: "${searchText}" → "${bestMatch}"${oldLabel} (スコア: ${bestScore})${newOldInfo}`);
       
       return {
         doItem: bestMatch,
@@ -959,3 +980,105 @@ function findBestDoMapping(searchText) {
     return null;
   }
 }
+
+
+
+
+
+
+
+
+
+/**
+ * 一時ファイルの削除処理
+ * @param {string} tempSpreadsheetId - 一時スプレッドシートのID
+ * @returns {Object} 削除結果
+ */
+function cleanupTempFiles(tempSpreadsheetId) {
+  try {
+    if (!tempSpreadsheetId) {
+      console.log('⚠️ 一時ファイル削除: 一時ファイルIDが指定されていません');
+      return { success: false, deletedFiles: 0, error: '一時ファイルIDが指定されていません' };
+    }
+    
+    console.log(`🗑️ 一時ファイル削除開始: ${tempSpreadsheetId}`);
+    
+    let deletedFiles = 0;
+    const errors = [];
+    
+    // 一時スプレッドシートを削除
+    try {
+      const tempSpreadsheet = DriveApp.getFileById(tempSpreadsheetId);
+      if (tempSpreadsheet) {
+        tempSpreadsheet.setTrashed(true);
+        console.log(`✅ 一時スプレッドシート削除完了: ${tempSpreadsheetId}`);
+        deletedFiles++;
+      } else {
+        console.log(`⚠️ 一時スプレッドシートが見つかりません: ${tempSpreadsheetId}`);
+      }
+    } catch (spreadsheetError) {
+      const errorMsg = `一時スプレッドシート削除エラー: ${spreadsheetError.message}`;
+      console.log(`❌ ${errorMsg}`);
+      errors.push(errorMsg);
+    }
+    
+    // 関連する一時ファイルも検索して削除（ファイル名パターンマッチ）
+    try {
+      const tempFiles = DriveApp.getFilesByName(`temp_*`);
+      while (tempFiles.hasNext()) {
+        const tempFile = tempFiles.next();
+        const fileName = tempFile.getName();
+        
+        // 古い一時ファイル（24時間以上前）を削除
+        const fileDate = tempFile.getDateCreated();
+        const now = new Date();
+        const hoursDiff = (now - fileDate) / (1000 * 60 * 60);
+        
+        if (hoursDiff > 24) {
+          try {
+            tempFile.setTrashed(true);
+            console.log(`✅ 古い一時ファイル削除完了: ${fileName} (${Math.round(hoursDiff)}時間前)`);
+            deletedFiles++;
+          } catch (deleteError) {
+            const errorMsg = `古い一時ファイル削除エラー: ${fileName} - ${deleteError.message}`;
+            console.log(`❌ ${errorMsg}`);
+            errors.push(errorMsg);
+          }
+        }
+      }
+    } catch (searchError) {
+      const errorMsg = `一時ファイル検索エラー: ${searchError.message}`;
+      console.log(`⚠️ ${errorMsg}`);
+      errors.push(errorMsg);
+    }
+    
+    // 結果を返す
+    if (errors.length === 0) {
+      console.log(`🗑️ 一時ファイル削除完了: ${deletedFiles}件のファイルを削除`);
+      return {
+        success: true,
+        deletedFiles: deletedFiles,
+        message: `${deletedFiles}件の一時ファイルを削除しました`
+      };
+    } else {
+      console.log(`⚠️ 一時ファイル削除完了（一部エラー）: ${deletedFiles}件削除、${errors.length}件エラー`);
+      return {
+        success: true,
+        deletedFiles: deletedFiles,
+        errors: errors,
+        message: `${deletedFiles}件の一時ファイルを削除しました（${errors.length}件でエラー）`
+      };
+    }
+    
+  } catch (error) {
+    console.log(`❌ 一時ファイル削除処理エラー: ${error.message}`);
+    return {
+      success: false,
+      deletedFiles: 0,
+      error: error.message,
+      stack: error.stack
+    };
+  }
+}
+
+
