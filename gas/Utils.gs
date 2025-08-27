@@ -366,6 +366,60 @@ function getMergedCellValue(sheet, row, col) {
 }
 
 /**
+ * ファイルパスから必要な情報を取得してファイルIDを特定
+ * @returns {Object} ファイル情報
+ */
+function resolveFilePathToFileId() {
+  try {
+    console.log('🔍 ファイルパス解決開始');
+    
+    // ファイルパスを読み込み
+    const folderPath = loadFolderPath();
+    if (!folderPath) {
+      throw new Error('ファイルパスが設定されていません');
+    }
+    
+    // ファイルパスから自治体フォルダキーとサブパスを抽出
+    const pathInfo = convertWindowsPathToDrivePath(folderPath);
+    if (!pathInfo) {
+      throw new Error('パス情報の抽出に失敗しました');
+    }
+    
+    console.log(`📋 抽出されたパス情報:`);
+    console.log(`  - 自治体フォルダキー: ${pathInfo.folderKey}`);
+    console.log(`  - サブパス: ${pathInfo.subPath}`);
+    
+    // 自治体フォルダタブからフォルダIDを取得
+    const folderId = findMunicipalityFolder(pathInfo.folderKey);
+    if (!folderId) {
+      throw new Error(`自治体フォルダ "${pathInfo.folderKey}" が見つかりません`);
+    }
+    
+    // ファイル名を抽出
+    const fileName = extractFileNameFromPath(folderPath);
+    
+    // サブパスを使用してファイルを検索
+    const fileId = findFileInFolderWithSubPath(folderId, pathInfo.subPath, fileName);
+    if (!fileId) {
+      throw new Error(`ファイル "${fileName}" がパス "${pathInfo.subPath}" 内に見つかりません`);
+    }
+    
+    console.log(`✅ ファイルID取得完了: ${fileId}`);
+    
+    return {
+      fileId: fileId,
+      fileName: fileName,
+      folderId: folderId,
+      pathInfo: pathInfo
+    };
+    
+  } catch (error) {
+    console.log(`❌ ファイルパス解決エラー: ${error.message}`);
+    throw error;
+  }
+}
+
+/**
  * ユーティリティ関数のテスト実行
  */
 function testUtils() {
@@ -399,5 +453,36 @@ function testUtils() {
     
   } catch (error) {
     console.error('ユーティリティ関数テストエラー:', error.message);
+  }
+}
+
+/**
+ * resolveFilePathToFileId関数のテスト実行
+ */
+function testResolveFilePathToFileId() {
+  try {
+    console.log('=== resolveFilePathToFileId テスト開始 ===');
+    
+    // 設定値の確認
+    console.log('設定:', JSON.stringify(CONFIG, null, 2));
+    
+    // 関数の存在確認
+    console.log('関数存在確認:');
+    console.log('- loadFolderPath:', typeof loadFolderPath);
+    console.log('- convertWindowsPathToDrivePath:', typeof convertWindowsPathToDrivePath);
+    console.log('- findMunicipalityFolder:', typeof findMunicipalityFolder);
+    console.log('- extractFileNameFromPath:', typeof extractFileNameFromPath);
+    console.log('- findFileInFolderWithSubPath:', typeof findFileInFolderWithSubPath);
+    console.log('- resolveFilePathToFileId:', typeof resolveFilePathToFileId);
+    
+    // 実際の処理を実行
+    const result = resolveFilePathToFileId();
+    console.log('結果:', result);
+    
+    console.log('=== resolveFilePathToFileId テスト完了 ===');
+    
+  } catch (error) {
+    console.error('resolveFilePathToFileId テストエラー:', error.message);
+    console.error('スタックトレース:', error.stack);
   }
 }

@@ -27,38 +27,9 @@ function main() {
   try {
     console.log('=== 返礼品情報整形処理開始 ===');
     
-    // ファイルパスを読み込み
-    const folderPath = loadFolderPath();
-    if (!folderPath) {
-      throw new Error('ファイルパスが設定されていません');
-    }
-    
-    // ファイルパスから自治体フォルダキーとサブパスを抽出
-    const pathInfo = convertWindowsPathToDrivePath(folderPath);
-    if (!pathInfo) {
-      throw new Error('パス情報の抽出に失敗しました');
-    }
-    
-    console.log(`📋 抽出されたパス情報:`);
-    console.log(`  - 自治体フォルダキー: ${pathInfo.folderKey}`);
-    console.log(`  - サブパス: ${pathInfo.subPath}`);
-    
-    // 自治体フォルダタブからフォルダIDを取得
-    const folderId = findMunicipalityFolder(pathInfo.folderKey);
-    if (!folderId) {
-      throw new Error(`自治体フォルダ "${pathInfo.folderKey}" が見つかりません`);
-    }
-    
-    // ファイル名を抽出
-    const fileName = extractFileNameFromPath(folderPath);
-    
-    // サブパスを使用してファイルを検索
-    const fileId = findFileInFolderWithSubPath(folderId, pathInfo.subPath, fileName);
-    if (!fileId) {
-      throw new Error(`ファイル "${fileName}" がパス "${pathInfo.subPath}" 内に見つかりません`);
-    }
-    
-    console.log(`✅ ファイルID取得完了: ${fileId}`);
+    // ファイルパスからファイルIDを解決
+    const fileInfo = resolveFilePathToFileId();
+    const { fileId, fileName } = fileInfo;
     
     // Phase 1: 基本データ抽出
     const phase1Result = executePhase1(fileId, fileName);
