@@ -1,22 +1,23 @@
 /**
- * Phase 2: 指定列データ抽出（超高速版）
+ * Phase 2: 指定列データ抽出（完全超高速版）
+ * B2セルで指定列の選択的抽出、またはF列起点の返礼品データ抽出を行う
  * 
  * パフォーマンス最適化:
- * - キャッシュ機能による重複処理回避
  * - バッチ処理による一括操作
- * - 並列処理による高速化
+ * - キャッシュ機能による重複処理回避
+ * - 結合セル情報の一括取得
  * - メモリ効率化
- * - B2空の場合の高速処理
+ * - 並列処理のシミュレーション
  */
 
 /**
- * Phase 2のメイン処理（超高速版）
+ * Phase 2のメイン処理（完全超高速版）
  * @param {Sheet} sheet - 処理対象のスプレッドシート
  * @returns {Object} 抽出された列データ
  */
 function executePhase2(sheet) {
   try {
-    console.log('=== Phase 2: 指定列データ抽出開始（超高速版）===');
+    console.log('=== Phase 2: 指定列データ抽出開始（完全超高速版）===');
     const startTime = new Date();
     
     // シートオブジェクトの存在確認
@@ -31,25 +32,25 @@ function executePhase2(sheet) {
     let columnData = null;
     
     if (columnSpec && columnSpec.trim() !== '') {
-      // B2セルに指定がある場合
-      console.log(`🔍 指定列データ抽出開始: ${columnSpec}`);
+      // B2セルに指定がある場合（完全超高速版）
+      console.log(`🔍 指定列データ抽出開始（完全超高速版）: ${columnSpec}`);
       const columnNumbers = parseColumnSpecOptimized(columnSpec);
       if (columnNumbers && columnNumbers.length > 0) {
-        columnData = extractSpecifiedColumnsOptimized(sheet, columnNumbers);
+        columnData = extractSpecifiedColumnsFullyOptimized(sheet, columnNumbers);
       }
     } else {
-      // B2セルが空の場合（超高速処理）
-      console.log(`🔍 F列起点データ抽出開始（超高速版）`);
-      columnData = extractFColumnDataOptimized(sheet);
+      // B2セルが空の場合（完全超高速版）
+      console.log(`🔍 F列起点データ抽出開始（完全超高速版）`);
+      columnData = extractFColumnDataFullyOptimized(sheet);
     }
     
     if (columnData) {
-      outputColumnDataToInfoExtractionTabOptimized(columnData);
+      outputColumnDataToInfoExtractionTabFullyOptimized(columnData);
     }
     
     const endTime = new Date();
     const processingTime = endTime - startTime;
-    console.log(`⚡ Phase 2完了: ${processingTime}ms（超高速版）`);
+    console.log(`⚡ Phase 2完了: ${processingTime}ms（完全超高速版）`);
     console.log('=== Phase 2: 指定列データ抽出完了 ===');
     
     return {
@@ -151,14 +152,14 @@ function getColumnNumber(columnLetter) {
 }
 
 /**
- * 指定された列のデータを抽出（超高速版）
+ * 指定された列のデータを抽出（完全超高速版・バッチ処理）
  * @param {Sheet} sheet - スプレッドシート
  * @param {Array} columnNumbers - 列番号の配列
  * @returns {Object} 抽出されたデータ
  */
-function extractSpecifiedColumnsOptimized(sheet, columnNumbers) {
+function extractSpecifiedColumnsFullyOptimized(sheet, columnNumbers) {
   try {
-    console.log(`🔍 指定列データ抽出開始: ${columnNumbers.join(', ')}列目`);
+    console.log(`🔍 指定列データ抽出開始（完全超高速版）: ${columnNumbers.join(', ')}列目`);
     
     const lastRow = sheet.getLastRow();
     const result = {
@@ -167,32 +168,68 @@ function extractSpecifiedColumnsOptimized(sheet, columnNumbers) {
     };
     
     // バッチ処理による高速データ取得
-    for (let row = 1; row <= 3; row++) {
-      const rowData = [];
-      for (let colIndex = 0; colIndex < columnNumbers.length; colIndex++) {
-        const col = columnNumbers[colIndex];
-        const value = getMergedCellValueWithMergeInfoOptimized(sheet, row, col);
-        rowData.push(value);
+    if (lastRow >= 1) {
+      // ヘッダーデータ（1-3行目）を一括取得
+      const minCol = Math.min(...columnNumbers);
+      const maxCol = Math.max(...columnNumbers);
+      const headerRange = sheet.getRange(1, minCol, 3, maxCol - minCol + 1);
+      const headerValues = headerRange.getValues();
+      
+      // 結合セル情報を一括取得（エラーハンドリング付き）
+      let mergedRanges = [];
+      try {
+        if (typeof sheet.getMergedRanges === 'function') {
+          mergedRanges = sheet.getMergedRanges();
+        } else {
+          console.log('⚠️ getMergedRanges()が利用できません。結合セル処理をスキップします。');
+        }
+      } catch (error) {
+        console.log(`⚠️ 結合セル情報取得エラー: ${error.message}。結合セル処理をスキップします。`);
       }
-      result.headerData.push(rowData);
-    }
-    
-    // 4行目以降のデータをバッチ処理で取得
-    if (lastRow >= 4) {
-      const bodyData = [];
-      for (let row = 4; row <= lastRow; row++) {
+      
+      const headerMergedInfo = getMergedCellInfoForRange(mergedRanges, 1, 3, minCol, maxCol);
+      
+      // ヘッダーデータの処理（バッチ処理）
+      for (let row = 0; row < 3; row++) {
         const rowData = [];
-        for (let colIndex = 0; colIndex < columnNumbers.length; colIndex++) {
-          const col = columnNumbers[colIndex];
-          const value = getMergedCellValueWithMergeInfoOptimized(sheet, row, col);
+        for (let i = 0; i < columnNumbers.length; i++) {
+          const col = columnNumbers[i];
+          const colIndex = col - minCol;
+          const value = processMergedCellValueOptimized(headerValues[row][colIndex], row + 1, col, headerMergedInfo);
           rowData.push(value);
         }
-        bodyData.push(rowData);
+        result.headerData.push(rowData);
+        console.log(`行${row + 1}: ${rowData.join(' | ')}`);
       }
-      result.bodyData = bodyData;
+      
+      // 4行目以降のデータを一括取得（バッチ処理）
+      if (lastRow >= 4) {
+        const bodyRange = sheet.getRange(4, minCol, lastRow - 3, maxCol - minCol + 1);
+        const bodyValues = bodyRange.getValues();
+        
+        // 結合セル情報を一括取得（既に取得済みのmergedRangesを使用）
+        const bodyMergedInfo = getMergedCellInfoForRange(mergedRanges, 4, lastRow, minCol, maxCol);
+        
+        // ボディデータの処理（チャンク処理によるメモリ効率化）
+        const bodyData = processDataInChunks(bodyValues, (rowData, rowIndex) => {
+          const actualRow = rowIndex + 4;
+          const processedRow = [];
+          
+          for (let i = 0; i < columnNumbers.length; i++) {
+            const col = columnNumbers[i];
+            const colIndex = col - minCol;
+            const value = processMergedCellValueOptimized(rowData[colIndex], actualRow, col, bodyMergedInfo);
+            processedRow.push(value);
+          }
+          
+          return processedRow;
+        }, CONFIG.PERFORMANCE.CHUNK_SIZE || 50);
+        
+        result.bodyData = bodyData;
+      }
     }
     
-    console.log(`✅ 指定列データ抽出完了: ${result.headerData.length}行 + ${result.bodyData.length}行`);
+    console.log(`✅ 指定列データ抽出完了（完全超高速版）: ${result.headerData.length}行 + ${result.bodyData.length}行`);
     return result;
     
   } catch (error) {
@@ -202,13 +239,13 @@ function extractSpecifiedColumnsOptimized(sheet, columnNumbers) {
 }
 
 /**
- * F列起点の返礼品データを抽出（超高速版、結合セル対応）
+ * F列起点の返礼品データを抽出（完全超高速版・バッチ処理）
  * @param {Sheet} sheet - スプレッドシート
  * @returns {Object} 抽出されたデータ
  */
-function extractFColumnDataOptimized(sheet) {
+function extractFColumnDataFullyOptimized(sheet) {
   try {
-    console.log(`🔍 F列起点データ抽出開始（超高速版）`);
+    console.log(`🔍 F列起点データ抽出開始（完全超高速版）`);
     
     // シートオブジェクトの存在確認
     if (!sheet) {
@@ -245,7 +282,7 @@ function extractFColumnDataOptimized(sheet) {
       const headerRange = sheet.getRange(1, startCol, 3, actualLastCol - startCol + 1);
       const headerValues = headerRange.getValues();
       
-      // 結合セル情報を一括取得
+      // 結合セル情報を一括取得（エラーハンドリング付き）
       let mergedRanges = [];
       try {
         if (typeof sheet.getMergedRanges === 'function') {
@@ -259,7 +296,7 @@ function extractFColumnDataOptimized(sheet) {
       
       const headerMergedInfo = getMergedCellInfoForRange(mergedRanges, 1, 3, startCol, actualLastCol);
       
-      // ヘッダーデータの処理
+      // ヘッダーデータの処理（バッチ処理）
       for (let row = 0; row < 3; row++) {
         const rowData = [];
         for (let col = 0; col < headerValues[row].length; col++) {
@@ -269,9 +306,10 @@ function extractFColumnDataOptimized(sheet) {
           rowData.push(value);
         }
         result.headerData.push(rowData);
+        console.log(`行${row + 1}: ${rowData.join(' | ')}`);
       }
       
-      // ボディデータ（4行目以降）を一括取得
+      // 4行目以降のデータを一括取得（バッチ処理）
       if (lastRow >= 4) {
         const bodyRange = sheet.getRange(4, startCol, lastRow - 3, actualLastCol - startCol + 1);
         const bodyValues = bodyRange.getValues();
@@ -297,7 +335,7 @@ function extractFColumnDataOptimized(sheet) {
       }
     }
     
-    console.log(`📊 F列起点データ抽出完了:`);
+    console.log(`📊 F列起点データ抽出完了（完全超高速版）:`);
     console.log(`  - ヘッダーデータ: ${result.headerData.length}行`);
     console.log(`  - ボディデータ: ${result.bodyData.length}行`);
     console.log(`  - 抽出列数: ${actualLastCol - startCol + 1}列`);
@@ -538,10 +576,10 @@ function processDataInChunks(data, processRow, chunkSize) {
 }
 
 /**
- * 列データを情報抽出タブに出力（超高速版）
+ * 列データを情報抽出タブに出力（完全超高速版・バッチ処理）
  * @param {Object} extractedData - 抽出されたデータ
  */
-function outputColumnDataToInfoExtractionTabOptimized(extractedData) {
+function outputColumnDataToInfoExtractionTabFullyOptimized(extractedData) {
   try {
     if (!extractedData) {
       console.log(`⚠️ 出力データがありません`);
@@ -551,11 +589,11 @@ function outputColumnDataToInfoExtractionTabOptimized(extractedData) {
     const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
     const sheet = ss.getSheetByName(CONFIG.SHEETS.INFO_EXTRACTION);
     
-    console.log(`📝 列データを情報抽出タブに出力開始（超高速版）`);
+    console.log(`📝 列データを情報抽出タブに出力開始（完全超高速版）`);
     
     // ヘッダーデータ（1-3行目）を4-6行目に出力（バッチ処理）
     if (extractedData.headerData && extractedData.headerData.length > 0) {
-      console.log(`📝 ヘッダーデータ出力: 4-6行目 (D列から)`);
+      console.log(`📝 ヘッダーデータ出力（完全超高速版）: 4-6行目 (D列から)`);
       
       // バッチ処理による高速出力
       const headerRange = sheet.getRange(4, 4, extractedData.headerData.length, extractedData.headerData[0].length);
@@ -566,7 +604,7 @@ function outputColumnDataToInfoExtractionTabOptimized(extractedData) {
     
     // ボディデータ（4行目以降）を8行目以降に出力（バッチ処理）
     if (extractedData.bodyData && extractedData.bodyData.length > 0) {
-      console.log(`📝 ボディデータ出力: 8行目以降 (D列から)`);
+      console.log(`📝 ボディデータ出力（完全超高速版）: 8行目以降 (D列から)`);
       
       // バッチ処理による高速出力
       const bodyRange = sheet.getRange(8, 4, extractedData.bodyData.length, extractedData.bodyData[0].length);
@@ -575,7 +613,7 @@ function outputColumnDataToInfoExtractionTabOptimized(extractedData) {
       console.log(`✅ ボディデータ出力完了: ${extractedData.bodyData.length}行`);
     }
     
-    console.log(`✅ 列データ出力完了（超高速版）`);
+    console.log(`✅ 列データ出力完了（完全超高速版）`);
     
   } catch (error) {
     console.log(`❌ 列データ出力エラー: ${error.message}`);
