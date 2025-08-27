@@ -172,9 +172,9 @@ function extractProductDataFromSheet(sheet, tempFileId) {
         }
         
         if (hasRightColumnData) {
-          console.log(`  - 行${row}: ${mergedRowCount}行結合 (右列にデータあり → 追加不要)`);
+          console.log(`  - 行${row}: ${mergedRowCount}行結合 (右列データあり)`);
         } else {
-          console.log(`  - 行${row}: ${mergedRowCount}行結合 (右列にデータなし → 追加行数: ${mergedRowCount - 1})`);
+          console.log(`  - 行${row}: ${mergedRowCount}行結合 (右列データなし)`);
           actualAddedRows += mergedRowCount - 1;
         }
         
@@ -231,7 +231,7 @@ function extractProductDataFromSheet(sheet, tempFileId) {
           }
           
           if (hasRightColumnData) {
-            console.log(`  ✅ 右列にデータが存在するため、結合セル内の各行を個別処理`);
+            console.log(`  ✅ 右列にデータあり → 結合セル内の各行を個別処理`);
             // 右列にデータがある場合も、結合セル内の各行を処理
             for (let j = 0; j < mergedRowCount; j++) {
               const currentRow = actualRow + j;
@@ -242,15 +242,13 @@ function extractProductDataFromSheet(sheet, tempFileId) {
                 productName: currentProductName,
                 rightColumn: currentRightColumn
               });
-              
-              console.log(`    - 行${currentRow}: 商品名="${currentProductName}", 右列="${currentRightColumn}"`);
             }
             
             // 結合セルの分だけスキップ
             i += mergedRowCount - 1;
             continue;
           } else {
-            console.log(`  ⚠️ 右列にデータが存在しないため、結合セル分の行を追加`);
+            console.log(`  ⚠️ 右列にデータなし → 結合セル分の行を追加`);
             // 結合されている分の行を空で追加
             for (let j = 0; j < mergedRowCount; j++) {
               const currentRow = actualRow + j;
@@ -261,8 +259,6 @@ function extractProductDataFromSheet(sheet, tempFileId) {
                 productName: currentProductName,
                 rightColumn: currentRightColumn
               });
-              
-              console.log(`    - 行${currentRow}: 商品名="${currentProductName}", 右列="${currentRightColumn}"`);
             }
             
             // 結合セルの分だけスキップ
@@ -305,12 +301,17 @@ function extractProductDataFromSheet(sheet, tempFileId) {
  */
 function outputToInfoExtractionTab(extractedData) {
   try {
+    console.log('🚀 情報抽出タブへの出力開始');
+    
     const spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
     const infoSheet = spreadsheet.getSheetByName(CONFIG.SHEETS.INFO_EXTRACTION);
     
     if (!infoSheet) {
+      console.log('❌ 情報抽出タブが見つかりません');
       return { success: false, error: '情報抽出タブが見つかりません' };
     }
+    
+    console.log(`📋 対象シート: ${infoSheet.getName()}`);
     
     // データ構造を確認して適切に処理
     let dataArray = extractedData;
@@ -323,40 +324,66 @@ function outputToInfoExtractionTab(extractedData) {
       dataArray = extractedData;
       console.log(`📊 配列形式のデータを検出: ${dataArray.length}行`);
     } else {
+      console.log('❌ 無効なデータ形式です');
       return { success: false, error: '無効なデータ形式です' };
     }
     
-    // B8、C8以降の既存データをクリア
-    const lastRow = infoSheet.getLastRow();
-    if (lastRow >= CONFIG.OUTPUT.START_ROW) {
-      infoSheet.getRange(CONFIG.OUTPUT.START_ROW, CONFIG.OUTPUT.COL_B, 
-                        lastRow - CONFIG.OUTPUT.START_ROW + 1, 2).clear();
-    }
-    
-    // データを出力
-    let outputRows = 0;
+    // データの前処理
+    console.log('🔄 データの前処理開始');
+    const outputData = [];
     for (let i = 0; i < dataArray.length; i++) {
       const data = dataArray[i];
-      const outputRow = CONFIG.OUTPUT.START_ROW + i;
-      
-      // B列: 商品名
-      infoSheet.getRange(outputRow, CONFIG.OUTPUT.COL_B).setValue(data.productName);
-      
-      // C列: 右隣列の値
-      infoSheet.getRange(outputRow, CONFIG.OUTPUT.COL_C).setValue(data.rightColumn);
-      
-      outputRows++;
+      outputData.push([
+        data.productName || '',      // B列: 商品名
+        data.rightColumn || ''       // C列: 右隣列の値
+      ]);
     }
+    console.log(`✅ データ前処理完了: ${outputData.length}行`);
+    
+    // 既存データのクリア
+    console.log('🧹 既存データのクリア開始');
+    const lastRow = infoSheet.getLastRow();
+    if (lastRow >= CONFIG.OUTPUT.START_ROW) {
+      const clearRange = infoSheet.getRange(
+        CONFIG.OUTPUT.START_ROW, 
+        CONFIG.OUTPUT.COL_B, 
+        lastRow - CONFIG.OUTPUT.START_ROW + 1, 
+        2
+      );
+      clearRange.clear();
+      console.log(`🗑️ クリア完了: ${CONFIG.OUTPUT.START_ROW}行目〜${lastRow}行目`);
+    } else {
+      console.log('ℹ️ クリア対象のデータなし');
+    }
+    
+    // バッチ処理でデータを一括出力（高速化）
+    console.log('📤 データ出力開始（バッチ処理）');
+    if (outputData.length > 0) {
+      const outputRange = infoSheet.getRange(
+        CONFIG.OUTPUT.START_ROW, 
+        CONFIG.OUTPUT.COL_B, 
+        outputData.length, 
+        2
+      );
+      outputRange.setValues(outputData);
+      console.log(`✅ データ出力完了: ${CONFIG.OUTPUT.START_ROW}行目〜${CONFIG.OUTPUT.START_ROW + outputData.length - 1}行目`);
+    }
+    
+    console.log('🎉 情報抽出タブへの出力完了');
     
     return {
       success: true,
-      outputRows: outputRows
+      outputRows: outputData.length,
+      outputRange: `${CONFIG.OUTPUT.START_ROW}行目〜${CONFIG.OUTPUT.START_ROW + outputData.length - 1}行目`
     };
     
   } catch (error) {
+    console.log(`❌ 情報抽出タブへの出力エラー: ${error.message}`);
+    console.log(`🔍 エラー詳細: ${error.toString()}`);
     return {
       success: false,
-      error: error.message
+      error: error.message,
+      stack: error.stack
     };
   }
 }
