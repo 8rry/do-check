@@ -337,36 +337,4 @@ function outputColumnDataToInfoExtractionTab(extractedData) {
   }
 }
 
-/**
- * Phase 2のテスト実行
- */
-function testPhase2() {
-  try {
-    console.log('=== Phase 2 テスト開始 ===');
-    
-    // 設定値の確認
-    console.log('設定:', JSON.stringify(CONFIG, null, 2));
-    
-    // スプレッドシートへの接続テスト
-    const spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-    console.log('スプレッドシート名:', spreadsheet.getName());
-    
-    // シートの存在確認
-    const sheets = spreadsheet.getSheets();
-    console.log('利用可能なシート:', sheets.map(s => s.getName()));
-    
-    // 列指定のテスト
-    const columnSpec = loadColumnSpec();
-    console.log('列指定:', columnSpec);
-    
-    if (columnSpec) {
-      const columnNumbers = parseColumnSpec(columnSpec);
-      console.log('解析された列番号:', columnNumbers);
-    }
-    
-    console.log('=== Phase 2 テスト完了 ===');
-    
-  } catch (error) {
-    console.error('Phase 2 テストエラー:', error.message);
-  }
-}
+

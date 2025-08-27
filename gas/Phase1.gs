@@ -389,28 +389,3 @@ function outputToInfoExtractionTab(extractedData) {
 }
 
 // getColumnLetter関数はUtils.gsで管理
-
-/**
- * Phase 1のテスト実行
- */
-function testPhase1() {
-  try {
-    console.log('=== Phase 1 テスト開始 ===');
-    
-    // 設定値の確認
-    console.log('設定:', JSON.stringify(CONFIG, null, 2));
-    
-    // スプレッドシートへの接続テスト
-    const spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-    console.log('スプレッドシート名:', spreadsheet.getName());
-    
-    // シートの存在確認
-    const sheets = spreadsheet.getSheets();
-    console.log('利用可能なシート:', sheets.map(s => s.getName()));
-    
-    console.log('=== Phase 1 テスト完了 ===');
-    
-  } catch (error) {
-    console.error('Phase 1 テストエラー:', error.message);
-  }
-}

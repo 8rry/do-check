@@ -49,27 +49,4 @@ function main() {
   }
 }
 
-/**
- * 全体テスト実行
- */
-function test() {
-  try {
-    console.log('=== 全体テスト開始 ===');
-    
-    // 設定値の確認
-    console.log('設定:', JSON.stringify(CONFIG, null, 2));
-    
-    // スプレッドシートへの接続テスト
-    const spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-    console.log('スプレッドシート名:', spreadsheet.getName());
-    
-    // シートの存在確認
-    const sheets = spreadsheet.getSheets();
-    console.log('利用可能なシート:', sheets.map(s => s.getName()));
-    
-    console.log('=== 全体テスト完了 ===');
-    
-  } catch (error) {
-    console.error('全体テストエラー:', error.message);
-  }
-}
+
