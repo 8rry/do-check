@@ -21,7 +21,7 @@
 
 /**
  * メイン処理
- * Phase 1とPhase 2を順次実行
+ * Phase 1、Phase 2、Phase 3を順次実行
  */
 function main() {
   try {
@@ -40,6 +40,13 @@ function main() {
     
     // Phase 2: 指定列データ抽出
     const phase2Result = executePhase2(phase1Result.sheet);
+    
+    // Phase 3: Do書き出し項目との紐付け
+    const phase3Result = executePhase3(phase1Result.sheet);
+    
+    console.log(`📊 Phase 3結果:`);
+    console.log(`  - 処理行数: ${phase3Result.processedRows}行`);
+    console.log(`  - マッピング成功: ${phase3Result.mappedItems}件`);
     
     console.log('=== 処理完了 ===');
     

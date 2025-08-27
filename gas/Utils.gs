@@ -813,3 +813,120 @@ function logColumnAnalysis(sheet, startCol, maxCol) {
     console.log(`❌ 列分析エラー: ${error.message}`);
   }
 }
+
+/**
+ * Phase 3: Do書き出し項目マッピング用のユーティリティ関数
+ */
+
+/**
+ * 部分検索によるキーワードマッチング
+ * @param {string} searchText - 検索対象のテキスト
+ * @param {Array} keywords - 検索キーワード配列
+ * @returns {boolean} マッチするかどうか
+ */
+function matchKeywords(searchText, keywords) {
+  try {
+    if (!searchText || !keywords || keywords.length === 0) {
+      return false;
+    }
+    
+    const normalizedSearchText = searchText.toString().toLowerCase().trim();
+    
+    // 各キーワードが部分一致するかをチェック（AND検索）
+    for (const keyword of keywords) {
+      const normalizedKeyword = keyword.toString().toLowerCase().trim();
+      
+      if (!normalizedSearchText.includes(normalizedKeyword)) {
+        return false; // 1つでもマッチしないキーワードがあればfalse
+      }
+    }
+    
+    return true; // 全てのキーワードがマッチ
+    
+  } catch (error) {
+    console.log(`❌ キーワードマッチングエラー: ${error.message}`);
+    return false;
+  }
+}
+
+/**
+ * 優先順位を考慮したキーワードマッチング
+ * @param {string} searchText - 検索対象のテキスト
+ * @param {Object} mappingRule - マッピングルール
+ * @returns {boolean} マッチするかどうか
+ */
+function matchKeywordsWithPriority(searchText, mappingRule) {
+  try {
+    if (!searchText || !mappingRule) {
+      return false;
+    }
+    
+    // メインキーワードでマッチング
+    if (mappingRule.keywords && matchKeywords(searchText, mappingRule.keywords)) {
+      return true;
+    }
+    
+    // フォールバックキーワードでマッチング
+    if (mappingRule.fallbackKeywords && mappingRule.fallbackKeywords.length > 0) {
+      if (mappingRule.priority === 'new') {
+        // 新を優先する場合、新を含むキーワードのみをチェック
+        const newKeywords = mappingRule.fallbackKeywords.filter(keyword => 
+          keyword.toString().toLowerCase().includes('新')
+        );
+        if (newKeywords.length > 0 && matchKeywords(searchText, newKeywords)) {
+          return true;
+        }
+      } else {
+        // 通常のフォールバックキーワードマッチング
+        if (matchKeywords(searchText, mappingRule.fallbackKeywords)) {
+          return true;
+        }
+      }
+    }
+    
+    return false;
+    
+  } catch (error) {
+    console.log(`❌ 優先順位付きキーワードマッチングエラー: ${error.message}`);
+    return false;
+  }
+}
+
+/**
+ * 最適なDo項目を検索
+ * @param {string} searchText - 検索対象のテキスト
+ * @returns {string|null} マッチするDo項目名、マッチしない場合はnull
+ */
+function findBestDoMapping(searchText) {
+  try {
+    if (!searchText || !CONFIG.DO_MAPPING) {
+      return null;
+    }
+    
+    let bestMatch = null;
+    let bestScore = 0;
+    
+    // 各マッピングルールをチェック
+    for (const [doItem, mappingRule] of Object.entries(CONFIG.DO_MAPPING)) {
+      if (matchKeywordsWithPriority(searchText, mappingRule)) {
+        // キーワード数が多いほど高スコア（より具体的なマッチング）
+        const score = mappingRule.keywords ? mappingRule.keywords.length : 0;
+        
+        if (score > bestScore) {
+          bestScore = score;
+          bestMatch = doItem;
+        }
+        }
+      }
+    
+    if (bestMatch) {
+      console.log(`🔍 Do項目マッチング: "${searchText}" → "${bestMatch}" (スコア: ${bestScore})`);
+    }
+    
+    return bestMatch;
+    
+  } catch (error) {
+    console.log(`❌ Do項目検索エラー: ${error.message}`);
+    return null;
+  }
+}
