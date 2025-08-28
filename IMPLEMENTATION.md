@@ -300,107 +300,383 @@ const dataStartRow = 8 + totalHeaderOffset;
 console.log(`📍 返礼品データ開始行: ${dataStartRow}行`);
 ```
 
-## 5. メイン処理の統合
+## 5. Phase 4: Doへの書き出し（実装予定）
 
-### 5.1 `processExcelFile()`関数の修正
+### 5.1 概要
+Phase 4では、Phase 1-3で抽出・紐付けされたデータを、Do書き出し用タブに整形して出力します。単一商品と定期便を自動判別し、それぞれ適切な形式でデータをクレンジングします。
 
+### 5.2 主要機能
+- **選択的処理**: チェックボックスで選択された項目のみを処理
+- **商品種別自動判別**: 単一商品か定期便かの自動判定
+- **データクレンジング**: 各種データの整形・変換処理
+- **定期便対応**: 子マスタ・親マスタの自動生成
+
+### 5.3 実装設計
+
+#### **5.3.1 メイン制御フロー**
 ```javascript
-function processExcelFile(fileId, fileName) {
-  var tempFileId = null;
+function executePhase4() {
   try {
-    console.log(`📊 Excel処理開始: ${fileName}`);
+    // 1. チェックボックス確認
+    const checkedColumns = getCheckedColumns();
     
-    // ExcelファイルをGoogle Sheetsに変換
-    var excelFile = DriveApp.getFileById(fileId);
-    var blob = excelFile.getBlob();
-    var tempFileName = 'temp_' + fileName.replace(/[^a-zA-Z0-9]/g, '_') + '_' + new Date().getTime();
+    // 2. 商品種別判別
+    const productTypes = determineProductTypes(checkedColumns);
     
-    var resource = {
-      title: tempFileName,
-      mimeType: MimeType.GOOGLE_SHEETS
-    };
+    // 3. データ抽出・格納
+    const extractedData = extractDataForDo(checkedColumns, productTypes);
     
-    var convertedFile = Drive.Files.insert(resource, blob, { convert: true });
-    tempFileId = convertedFile.id;
-    console.log(`✅ Google Sheetsに変換完了: ${tempFileId}`);
+    // 4. データクレンジング
+    const cleanedData = cleanData(extractedData);
     
-    // 変換されたスプレッドシートを開く
-    var ss = SpreadsheetApp.openById(tempFileId);
-    var sheet = ss.getActiveSheet();
+    // 5. Do書き出し用タブへの出力
+    outputToDoTabs(cleanedData, productTypes);
     
-    // Phase 1: 基本データ抽出
-    var extractedData = extractProductDataFromSheet(sheet);
-    outputToInfoExtractionTab(extractedData);
+    return true;
+  } catch (error) {
+    console.error('Phase 4 エラー:', error);
+    return false;
+  }
+}
+```
+
+#### **5.3.2 チェックボックス確認処理**
+```javascript
+function getCheckedColumns() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('情報抽出タブ');
+  const checkedColumns = [];
+  
+  // D列以降の7行目をチェック
+  for (let col = 4; col <= sheet.getLastColumn(); col++) {
+    const cell = sheet.getRange(7, col);
+    if (cell.getValue() === true) { // チェックボックスがチェックされている
+      checkedColumns.push(col);
+    }
+  }
+  
+  return checkedColumns;
+}
+```
+
+#### **5.3.3 商品種別判別処理**
+```javascript
+function determineProductTypes(checkedColumns) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('情報抽出タブ');
+  const productTypes = {};
+  
+  checkedColumns.forEach(col => {
+    // A列の「商品名称」行の値を確認
+    const productNameCell = sheet.getRange(18, col); // 商品名称の行
+    const productName = productNameCell.getValue();
     
-    // Phase 2: 指定列データ抽出
-    var columnSpec = loadColumnSpec();
-    var columnData = null;
-    
-    if (columnSpec && columnSpec.trim() !== '') {
-      // B2セルに指定がある場合
-      console.log(`🔍 指定列データ抽出開始: ${columnSpec}`);
-      var columnNumbers = parseColumnSpec(columnSpec);
-      if (columnNumbers && columnNumbers.length > 0) {
-        columnData = extractSpecifiedColumns(sheet, columnNumbers);
-      }
+    // 「定期」文字が含まれているかチェック
+    if (productName && productName.toString().includes('定期')) {
+      productTypes[col] = 'subscription'; // 定期便
     } else {
-      // B2セルが空の場合
-      console.log(`🔍 F列起点データ抽出開始`);
-      columnData = extractFColumnData(sheet);
+      productTypes[col] = 'single'; // 単一商品
     }
+  });
+  
+  return productTypes;
+}
+```
+
+#### **5.3.4 データ抽出・格納処理**
+```javascript
+function extractDataForDo(checkedColumns, productTypes) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('情報抽出タブ');
+  const extractedData = {};
+  
+  checkedColumns.forEach(col => {
+    const productType = productTypes[col];
+    const columnData = {};
     
-    if (columnData) {
-      outputColumnDataToInfoExtractionTab(columnData);
-    }
-    
-    return extractedData;
-    
-  } catch (error) {
-    console.log(`❌ Excel処理エラー: ${error.message}`);
-    throw error;
-  } finally {
-    // 一時ファイルを削除
-    if (tempFileId) {
-      try {
-        DriveApp.getFileById(tempFileId).setTrashed(true);
-        console.log(`🗑️ 一時ファイルを削除: ${tempFileId}`);
-      } catch (deleteError) {
-        console.log(`⚠️ 一時ファイル削除エラー: ${deleteError.toString()}`);
+    // A8:A200の項目名をキーとしてデータを抽出
+    for (let row = 8; row <= 200; row++) {
+      const itemName = sheet.getRange(row, 1).getValue(); // A列の項目名
+      if (itemName) {
+        const dataValue = sheet.getRange(row, col).getValue();
+        columnData[itemName] = dataValue;
       }
     }
-  }
+    
+    extractedData[col] = {
+      type: productType,
+      data: columnData
+    };
+  });
+  
+  return extractedData;
 }
 ```
 
-### 5.2 `loadColumnSpec()`関数
-
+#### **5.3.5 データクレンジング処理**
 ```javascript
-function loadColumnSpec() {
-  try {
-    console.log(`🔍 列指定読み込み開始: セル${CONFIG.CELLS.COLUMN_SPEC}`);
+function cleanData(extractedData) {
+  const cleanedData = {};
+  
+  Object.keys(extractedData).forEach(col => {
+    const columnData = extractedData[col];
+    const cleanedColumnData = {};
     
-    const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-    const sheet = ss.getSheetByName(CONFIG.SHEETS.INFO_EXTRACTION);
+    Object.keys(columnData.data).forEach(itemName => {
+      let value = columnData.data[itemName];
+      
+      // 数字処理
+      if (['寄附金額1', '提供価格(税込)1', '固定送料1'].includes(itemName)) {
+        value = extractNumericValue(value);
+      }
+      
+      // 発送種別変換
+      if (itemName === '発送種別') {
+        value = convertShippingType(value);
+      }
+      
+      // 日付フォーマット統一
+      if (itemName.includes('期間') || itemName.includes('日付')) {
+        value = normalizeDateFormat(value);
+      }
+      
+      // 通年扱い処理
+      if (itemName.includes('期間')) {
+        value = processYearRoundHandling(value);
+      }
+      
+      // 文字変換処理
+      if (itemName === '配送伝票商品名称') {
+        value = convertFullWidthParentheses(value);
+      }
+      
+      cleanedColumnData[itemName] = value;
+    });
     
-    if (!sheet) {
-      console.log(`❌ 情報抽出タブが見つかりません`);
-      return '';
-    }
-    
-    const range = sheet.getRange(CONFIG.CELLS.COLUMN_SPEC);
-    const columnSpec = range.getValue();
-    
-    console.log(`✅ 列指定読み込み完了: "${columnSpec}" (型: ${typeof columnSpec})`);
-    console.log(`🔍 セル${CONFIG.CELLS.COLUMN_SPEC}の詳細: 値="${columnSpec}", 空文字判定=${columnSpec === ''}, null判定=${columnSpec === null}`);
-    
-    return columnSpec;
-    
-  } catch (error) {
-    console.log(`❌ 列指定読み込みエラー: ${error.message}`);
-    return '';
-  }
+    cleanedData[col] = {
+      type: columnData.type,
+      data: cleanedColumnData
+    };
+  });
+  
+  return cleanedData;
 }
 ```
+
+#### **5.3.6 定期便特別処理**
+```javascript
+function processSubscriptionProducts(cleanedData) {
+  const subscriptionData = {};
+  
+  Object.keys(cleanedData).forEach(col => {
+    if (cleanedData[col].type === 'subscription') {
+      const data = cleanedData[col].data;
+      
+      // 定期便回数を判定
+      const subscriptionCount = determineSubscriptionCount(data['商品名称']);
+      
+      // 子マスタ生成（1回目→2回目→3回目の順序）
+      for (let i = 1; i <= subscriptionCount; i++) {
+        const childData = generateChildMaster(data, i);
+        subscriptionData[`${col}_child_${i}`] = {
+          type: 'subscription_child',
+          data: childData
+        };
+      }
+      
+      // 親マスタ生成
+      const parentData = generateParentMaster(data, subscriptionCount);
+      subscriptionData[`${col}_parent`] = {
+        type: 'subscription_parent',
+        data: parentData
+      };
+    }
+  });
+  
+  return subscriptionData;
+}
+
+function generateChildMaster(data, count) {
+  const childData = { ...data };
+  
+  // 商品コード変換: 元コード + "-" + 回数
+  if (data['商品コード']) {
+    childData['商品コード'] = `${data['商品コード']}-${count}`;
+  }
+  
+  // 商品名称変換: 定期便表記を除去
+  if (data['商品名称']) {
+    childData['商品名称'] = data['商品名称'].replace(/定期便?/g, '');
+  }
+  
+  return childData;
+}
+
+function generateParentMaster(data, count) {
+  const parentData = { ...data };
+  
+  // 親マスタ専用項目設定
+  parentData['定期便フラグ'] = '有';
+  parentData['定期便回数'] = count.toString();
+  parentData['定期便種別'] = determineSubscriptionType(data['商品名称']);
+  
+  return parentData;
+}
+```
+
+#### **5.3.7 Do書き出し用タブへの出力**
+```javascript
+function outputToDoTabs(cleanedData, productTypes) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const singleTab = ss.getSheetByName('Do書き出し用');
+  const subscriptionTab = ss.getSheetByName('Do書き出し用(定期)');
+  
+  Object.keys(cleanedData).forEach(col => {
+    const data = cleanedData[col];
+    
+    if (data.type === 'single') {
+      // 単一商品: Do書き出し用タブ
+      outputToSingleTab(singleTab, data.data);
+    } else if (data.type === 'subscription') {
+      // 定期便: Do書き出し用(定期)タブ
+      outputToSubscriptionTab(subscriptionTab, data.data);
+    }
+  });
+}
+
+function outputToSingleTab(tab, data) {
+  // データの最終行に追加（上書き防止）
+  const lastRow = tab.getLastRow();
+  const targetRow = lastRow + 1;
+  
+  // 項目名をキーとして適切な列にデータを配置
+  Object.keys(data).forEach(itemName => {
+    const columnIndex = findColumnIndexByItemName(tab, itemName);
+    if (columnIndex > 0) {
+      tab.getRange(targetRow, columnIndex).setValue(data[itemName]);
+    }
+  });
+}
+```
+
+### 5.4 データクレンジング詳細
+
+#### **5.4.1 数字抽出処理**
+```javascript
+function extractNumericValue(text) {
+  if (!text) return '';
+  
+  const numericMatch = text.toString().match(/[\d,]+/);
+  if (numericMatch) {
+    return numericMatch[0].replace(/,/g, '');
+  }
+  
+  return '';
+}
+```
+
+#### **5.4.2 発送種別変換**
+```javascript
+function convertShippingType(shippingType) {
+  if (!shippingType) return '';
+  
+  const type = shippingType.toString();
+  if (type.includes('常温')) return '通常便';
+  if (type.includes('冷蔵')) return '冷蔵便';
+  if (type.includes('冷凍')) return '冷凍便';
+  
+  return shippingType;
+}
+```
+
+#### **5.4.3 日付フォーマット統一**
+```javascript
+function normalizeDateFormat(dateText) {
+  if (!dateText) return '';
+  
+  const text = dateText.toString();
+  
+  // yyyy年mm月dd日 → yyyy/mm/dd
+  const japaneseMatch = text.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
+  if (japaneseMatch) {
+    const year = japaneseMatch[1];
+    const month = japaneseMatch[2].padStart(2, '0');
+    const day = japaneseMatch[3].padStart(2, '0');
+    return `${year}/${month}/${day}`;
+  }
+  
+  // yyyy-mm-dd → yyyy/mm/dd
+  const dashMatch = text.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (dashMatch) {
+    const year = dashMatch[1];
+    const month = dashMatch[2].padStart(2, '0');
+    const day = dashMatch[3].padStart(2, '0');
+    return `${year}/${month}/${day}`;
+  }
+  
+  // 上旬/下旬 → 具体的日付
+  const earlyMatch = text.match(/(\d{4})年(\d{1,2})月上旬/);
+  if (earlyMatch) {
+    const year = earlyMatch[1];
+    const month = earlyMatch[2].padStart(2, '0');
+    return `${year}/${month}/15`;
+  }
+  
+  const lateMatch = text.match(/(\d{4})年(\d{1,2})月下旬/);
+  if (lateMatch) {
+    const year = lateMatch[1];
+    const month = lateMatch[2].padStart(2, '0');
+    const lastDay = getLastDayOfMonth(parseInt(year), parseInt(month));
+    return `${year}/${month}/${lastDay}`;
+  }
+  
+  return dateText;
+}
+```
+
+#### **5.4.4 通年扱い処理**
+```javascript
+function processYearRoundHandling(periodText) {
+  if (!periodText) return '';
+  
+  const text = periodText.toString();
+  
+  // 通年扱いキーワードチェック
+  if (text.includes('通年') || text.includes('順次') || text.includes('随時')) {
+    return '通年扱い';
+  }
+  
+  return periodText;
+}
+```
+
+### 5.5 エラーハンドリング
+
+#### **5.5.1 入力値検証**
+- チェックボックスの存在確認
+- 必須項目の値チェック
+- データ型の妥当性確認
+
+#### **5.5.2 処理エラー対応**
+- ファイルアクセスエラー
+- データ変換エラー
+- 出力エラー
+
+#### **5.5.3 ログ出力**
+- 処理状況の詳細ログ
+- エラー情報の記録
+- 処理結果のサマリー
+
+### 5.6 パフォーマンス最適化
+
+#### **5.6.1 バッチ処理**
+- 大量データの分割処理
+- メモリ使用量の最適化
+
+#### **5.6.2 キャッシュ活用**
+- 頻繁にアクセスするデータのキャッシュ
+- 計算結果の再利用
+
+#### **5.6.3 非同期処理**
+- 時間のかかる処理の非同期化
+- ユーザー体験の向上
 
 ## 6. CONFIG定数
 

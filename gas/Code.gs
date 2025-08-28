@@ -119,4 +119,81 @@ function executePhasesInParallel(sheet) {
   }
 }
 
+/**
+ * Phase 4: Doへの書き出し（独立実行用）
+ * Phase 1-3とは独立して実行可能
+ * 
+ * 処理内容:
+ * 1. チェックボックスを確認（チェック項目のみ処理する）
+ * 2. 単一商品か、定期便かの見極め
+ * 3. 項目名をキーにDo書き出し用に格納
+ * 4. データをクレンジング
+ */
+function executePhase4Standalone() {
+  try {
+    console.log('=== Phase 4: Doへの書き出し開始 ===');
+    const startTime = new Date();
+    
+    // Phase 4の実行
+    const phase4Result = executePhase4();
+    
+    if (phase4Result) {
+      const endTime = new Date();
+      const processingTime = endTime - startTime;
+      console.log(`✅ Phase 4完了: ${processingTime}ms`);
+      console.log('=== Phase 4: Doへの書き出し完了 ===');
+    } else {
+      console.log('❌ Phase 4でエラーが発生しました');
+    }
+    
+    return phase4Result;
+    
+  } catch (error) {
+    console.log(`❌ Phase 4実行エラー: ${error.message}`);
+    throw error;
+  }
+}
+
+/**
+ * Phase 4: Doへの書き出し（内部実行用）
+ * @returns {boolean} 処理結果
+ */
+function executePhase4() {
+  try {
+    // 1. チェックボックスを確認（チェック項目のみ処理する）
+    const checkedColumns = getCheckedColumns();
+    if (checkedColumns.length === 0) {
+      console.log('⚠️ チェックされている列がありません');
+      return false;
+    }
+    console.log(`📋 チェック済み列数: ${checkedColumns.length}列`);
+    
+    // 2. 単一商品か、定期便かの見極め
+    const productTypes = determineProductTypes(checkedColumns);
+    const singleCount = Object.values(productTypes).filter(type => type === 'single').length;
+    const subscriptionCount = Object.values(productTypes).filter(type => type === 'subscription').length;
+    console.log(`🔍 商品種別判別完了: 単一商品${singleCount}件、定期便${subscriptionCount}件`);
+    
+    // 3. 項目名をキーにDo書き出し用に格納
+    const extractedData = extractDataForDo(checkedColumns, productTypes);
+    console.log(`📊 データ抽出完了: ${Object.keys(extractedData).length}列分のデータを抽出`);
+    
+    // 4. データをクレンジング
+    const cleanedData = cleanData(extractedData);
+    console.log(`🧹 データクレンジング完了: ${Object.keys(cleanedData).length}列分のデータをクレンジング`);
+    
+    // 5. Do書き出し用タブへの出力
+    const outputResult = outputToDoTabs(cleanedData, productTypes);
+    if (outputResult) {
+      console.log(`📤 Do書き出し用タブへの出力完了`);
+    }
+    
+    return true;
+    
+  } catch (error) {
+    console.error('❌ Phase 4 エラー:', error);
+    return false;
+  }
+}
+
 
