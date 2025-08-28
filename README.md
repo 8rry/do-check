@@ -7,9 +7,8 @@ Google Drive上のExcelファイルから返礼品情報を抽出し、Google Sh
 - **Phase 1**: 基本データ抽出（商品名、商品コード等）
 - **Phase 2**: 指定列データ抽出（B2セル指定またはF列起点）
 - **Phase 3**: Do書き出し項目との紐付け
-- **Phase 4**: データの検証・チェック
-- **Phase 5**: 最終出力・レポート生成
-- **Phase 6**: エラー処理・ログ管理
+- **Phase 4**: Doへの書き出し
+- **Phase 5**: データクリア
 
 ## 開発方針
 
@@ -38,9 +37,8 @@ gas/
 ├── Phase1.gs        # 基本データ抽出
 ├── Phase2.gs        # 指定列データ抽出
 ├── Phase3.gs        # Do項目紐付け
-├── Phase4.gs        # データ検証
-├── Phase5.gs        # 最終出力
-├── Phase6.gs        # エラー処理
+├── Phase4.gs        # Doへの書き出し
+├── Phase5.gs        # データクリア
 ├── Config.gs        # 設定管理
 └── Utils.gs         # 共通機能
 ```
