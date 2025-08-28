@@ -188,19 +188,34 @@ function findBestDoMapping(searchText) {
     
     // 各マッピングルールをチェック
     for (const [doItem, mappingRule] of Object.entries(CONFIG.DO_MAPPING)) {
-      // メインキーワードでマッチング（AND検索）
+      // メインキーワードでマッチング（searchTypeに応じてAND検索またはOR検索）
       let hasMainKeywordMatch = false;
       let keywordScore = 0;
       
       if (mappingRule.keywords && mappingRule.keywords.length > 0) {
-        // すべてのキーワードが含まれているかチェック（AND検索）
-        const allKeywordsMatch = mappingRule.keywords.every(keyword => 
-          searchText.toLowerCase().includes(keyword.toLowerCase())
-        );
+        // searchTypeに応じてAND検索またはOR検索を実行
+        let allKeywordsMatch = false;
+        
+        if (mappingRule.searchType === 'or') {
+          // OR検索: いずれかのキーワードが含まれていればOK
+          allKeywordsMatch = mappingRule.keywords.some(keyword => 
+            searchText.toLowerCase().includes(keyword.toLowerCase())
+          );
+          if (allKeywordsMatch) {
+            keywordScore = 1; // OR検索の場合はスコア1
+          }
+        } else {
+          // AND検索（デフォルト）: すべてのキーワードが含まれている必要
+          allKeywordsMatch = mappingRule.keywords.every(keyword => 
+            searchText.toLowerCase().includes(keyword.toLowerCase())
+          );
+          if (allKeywordsMatch) {
+            keywordScore = mappingRule.keywords.length;
+          }
+        }
         
         if (allKeywordsMatch) {
           hasMainKeywordMatch = true;
-          keywordScore = mappingRule.keywords.length;
         }
       }
       
