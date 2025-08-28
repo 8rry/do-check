@@ -1202,9 +1202,7 @@ function processDataInChunks(data, processFunction, chunkSize = 50) {
     const endTime = new Date();
     const processingTime = endTime - startTime;
     
-    if (CONFIG.PERFORMANCE.LOG_DETAIL) {
-      console.log(`⚡ チャンク処理完了: ${data.length}件 → ${results.length}件 (${processingTime}ms)`);
-    }
+    // 詳細ログは削除（ログ量削減）
     
     return results;
   } catch (error) {
@@ -1273,9 +1271,7 @@ function clearPerformanceCache(pattern = null) {
     });
   }
   
-  if (CONFIG.PERFORMANCE.LOG_DETAIL) {
-    console.log('🗑️ パフォーマンスキャッシュクリア完了');
-  }
+  // 詳細ログは削除（ログ量削減）
 }
 
 /**
@@ -1298,7 +1294,6 @@ function startPerformanceTimer(name) {
  */
 function endPerformanceTimer(name) {
   if (!PERFORMANCE_TIMERS[name]) {
-    console.log(`⚠️ タイマー "${name}" が見つかりません`);
     return 0;
   }
   
@@ -1308,40 +1303,44 @@ function endPerformanceTimer(name) {
   
   delete PERFORMANCE_TIMERS[name];
   
-  if (CONFIG.PERFORMANCE.LOG_DETAIL) {
-    console.log(`⏱️ パフォーマンス測定 "${name}": ${processingTime}ms`);
-  }
+  // 詳細ログは削除（ログ量削減）
   
   return processingTime;
 }
 
 /**
- * パフォーマンス最適化の設定
+ * パフォーマンス設定
  */
-function configurePerformanceOptimization() {
+function configurePerformanceSettings() {
   try {
-    // バッチサイズの最適化
+    // バッチサイズの設定
     if (!CONFIG.PERFORMANCE.BATCH_SIZE) {
-      CONFIG.PERFORMANCE.BATCH_SIZE = 100;
+      CONFIG.PERFORMANCE.BATCH_SIZE = 200;
     }
     
-    // チャンクサイズの最適化
+    // チャンクサイズの設定
     if (!CONFIG.PERFORMANCE.CHUNK_SIZE) {
-      CONFIG.PERFORMANCE.CHUNK_SIZE = 50;
+      CONFIG.PERFORMANCE.CHUNK_SIZE = 100;
     }
     
-    // キャッシュTTLの最適化
+    // キャッシュTTLの設定
     if (!CONFIG.PERFORMANCE.CACHE_TTL) {
-      CONFIG.PERFORMANCE.CACHE_TTL = 5 * 60 * 1000; // 5分
+      CONFIG.PERFORMANCE.CACHE_TTL = 10 * 60 * 1000; // 10分
     }
     
-    console.log('⚡ パフォーマンス最適化設定完了');
+    // ログレベルの設定
+    if (typeof CONFIG.PERFORMANCE.LOG_DETAIL === 'undefined') {
+      CONFIG.PERFORMANCE.LOG_DETAIL = false; // デフォルトで詳細ログを無効化
+    }
+    
+    console.log('⚡ パフォーマンス設定完了');
     console.log(`  - バッチサイズ: ${CONFIG.PERFORMANCE.BATCH_SIZE}`);
     console.log(`  - チャンクサイズ: ${CONFIG.PERFORMANCE.CHUNK_SIZE}`);
     console.log(`  - キャッシュTTL: ${CONFIG.PERFORMANCE.CACHE_TTL}ms`);
+    console.log(`  - 詳細ログ: ${CONFIG.PERFORMANCE.LOG_DETAIL ? '有効' : '無効'}`);
     
   } catch (error) {
-    console.log(`❌ パフォーマンス最適化設定エラー: ${error.message}`);
+    console.log(`❌ パフォーマンス設定エラー: ${error.message}`);
   }
 }
 

@@ -1,28 +1,27 @@
 /**
- * Phase 1: 基本データ抽出（超高速版）
+ * Phase 1: 基本データ抽出
  * 
- * パフォーマンス最適化:
+ * パフォーマンス改善:
  * - バッチ処理による一括操作
  * - キャッシュ機能による重複処理回避
- * - 並列処理による高速化
  * - メモリ効率化
  */
 
 /**
- * Phase 1実行（超高速版）
+ * Phase 1実行
  * @param {string} fileId - ファイルID
  * @param {string} fileName - ファイル名
  * @returns {Object} 処理結果
  */
 function executePhase1(fileId, fileName) {
   try {
-    console.log('=== Phase 1: 基本データ抽出開始（超高速版）===');
+    console.log('=== Phase 1: 基本データ抽出開始 ===');
     const startTime = new Date();
     
-    // ExcelファイルをGoogle Sheetsに変換（高速化）
-    const extractedData = processExcelFileForPhase1Optimized(fileId, fileName);
+    // ExcelファイルをGoogle Sheetsに変換
+    const extractedData = processExcelFileForPhase1(fileId, fileName);
     
-    // 情報抽出タブに商品データを出力（dataプロパティを渡す）
+    // 情報抽出タブに商品データを出力
     const result = outputProductDataToInfoExtractionTabOptimized(extractedData);
     
     const endTime = new Date();
@@ -50,18 +49,18 @@ function executePhase1(fileId, fileName) {
 }
 
 /**
- * Excelファイル処理（超高速版）
+ * Excelファイル処理
  * @param {string} fileId - ファイルID
  * @param {string} fileName - ファイル名
  * @returns {Object} 抽出されたデータ
  */
-function processExcelFileForPhase1Optimized(fileId, fileName) {
+function processExcelFileForPhase1(fileId, fileName) {
   let tempFileId = null;
   
   try {
-    console.log(`📊 Excel処理開始（超高速版）: ${fileName}`);
+    console.log(`📊 Excel処理開始: ${fileName}`);
     
-    // Drive APIを使用した変換（高速化）
+    // Drive APIを使用した変換
     console.log('🔄 Drive APIを使用した変換を試行中...');
     
     const excelFile = DriveApp.getFileById(fileId);
@@ -69,7 +68,7 @@ function processExcelFileForPhase1Optimized(fileId, fileName) {
     
     const tempFileName = 'temp_' + fileName.replace(/[^a-zA-Z0-9]/g, '_') + '_' + new Date().getTime();
     
-    // バッチ処理による高速変換
+    // バッチ処理による変換
     const resource = {
       title: tempFileName,
       mimeType: MimeType.GOOGLE_SHEETS
@@ -86,8 +85,8 @@ function processExcelFileForPhase1Optimized(fileId, fileName) {
     const ss = SpreadsheetApp.openById(tempFileId);
     const sheet = ss.getActiveSheet();
     
-    // 超高速データ抽出
-    const extractedData = extractProductDataFromSheetOptimized(sheet, tempFileId);
+    // データ抽出
+    const extractedData = extractProductDataFromSheet(sheet, tempFileId);
     
     return {
       ...extractedData,
@@ -96,7 +95,6 @@ function processExcelFileForPhase1Optimized(fileId, fileName) {
     
   } catch (error) {
     console.log(`❌ Excel処理エラー: ${error.message}`);
-    console.log(`🔍 エラー詳細: ${error.toString()}`);
     
     // Drive APIのエラーの場合、詳細情報を提供
     if (error.message.includes('Invalid mime type')) {
@@ -108,14 +106,14 @@ function processExcelFileForPhase1Optimized(fileId, fileName) {
 }
 
 /**
- * スプレッドシートから商品名データを抽出（超高速版）
+ * スプレッドシートから商品名データを抽出
  * @param {Sheet} sheet - スプレッドシート
  * @param {string} tempFileId - 一時ファイルID
  * @returns {Object} 抽出されたデータとシート情報
  */
-function extractProductDataFromSheetOptimized(sheet, tempFileId) {
+function extractProductDataFromSheet(sheet, tempFileId) {
   try {
-    console.log(`🔍 商品名列の特定開始（超高速版）`);
+    console.log(`🔍 商品名列の特定開始`);
     
     // キャッシュ機能による高速化
     const cacheKey = `product_data_${sheet.getSheetId()}_${sheet.getLastRow()}`;
@@ -128,8 +126,8 @@ function extractProductDataFromSheetOptimized(sheet, tempFileId) {
     let productNameColumn = null;
     let productNameRow = null;
     
-    // 並列処理による高速検索
-    const searchResults = findProductNameColumnParallel(sheet);
+    // 検索処理
+    const searchResults = findProductNameColumn(sheet);
     productNameColumn = searchResults.column;
     productNameRow = searchResults.row;
     
@@ -147,7 +145,7 @@ function extractProductDataFromSheetOptimized(sheet, tempFileId) {
     
     console.log(`📊 データ抽出範囲: ${getColumnLetter(productNameColumn)}4:${getColumnLetter(rightColumn)}${lastRow} (全${lastRow - 3}行)`);
     
-    // 超高速結合セル処理（エラーハンドリング付き）
+    // 結合セル処理
     let mergedCellData = [];
     try {
       mergedCellData = processMergedCellsOptimized(sheet, productNameColumn, lastRow);
@@ -157,7 +155,7 @@ function extractProductDataFromSheetOptimized(sheet, tempFileId) {
       mergedCellData = [];
     }
     
-    // バッチ処理による高速データ構築
+    // バッチ処理によるデータ構築
     const processedData = buildProductDataBatch(dataValues, mergedCellData, productNameColumn, rightColumn);
     
     // 結果をキャッシュに保存
@@ -177,22 +175,15 @@ function extractProductDataFromSheetOptimized(sheet, tempFileId) {
 }
 
 /**
- * 商品名列を並列処理で高速検索
+ * 商品名列を検索
  * @param {Sheet} sheet - スプレッドシート
  * @returns {Object} 検索結果
  */
-function findProductNameColumnParallel(sheet) {
+function findProductNameColumn(sheet) {
   try {
-    // 並列処理による高速検索
-    const searchPromises = [];
-    
+    // 検索処理
     for (let col = 1; col <= 4; col++) {
-      searchPromises.push(searchColumnForProductName(sheet, col));
-    }
-    
-    // 最初に見つかった列を返す
-    for (let i = 0; i < searchPromises.length; i++) {
-      const result = searchPromises[i];
+      const result = searchColumnForProductName(sheet, col);
       if (result.found) {
         const colLetter = getColumnLetter(result.column);
         console.log(`✅ 商品名列発見: 列${colLetter}の${result.row}行目`);
@@ -200,12 +191,11 @@ function findProductNameColumnParallel(sheet) {
       }
     }
     
-    return { found: false, column: null, row: null };
+    throw new Error('最初の4列で商品名列が見つかりませんでした');
     
   } catch (error) {
-    console.log(`❌ 並列検索エラー: ${error.message}`);
-    // フォールバック: 従来の順次検索
-    return findProductNameColumnSequential(sheet);
+    console.log(`❌ 商品名列検索エラー: ${error.message}`);
+    throw error;
   }
 }
 

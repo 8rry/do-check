@@ -155,9 +155,6 @@ function performDoMapping(extractedData) {
         });
         unmappedCount++;
         
-        if (CONFIG.PERFORMANCE.LOG_DETAIL) {
-          console.log(`❌ マッピング失敗: 行${data.row} "${searchText}"`);
-        }
       }
     }
     
