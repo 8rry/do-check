@@ -195,7 +195,7 @@ function extractSpecifiedColumnsFullyOptimized(sheet, columnNumbers) {
         for (let i = 0; i < columnNumbers.length; i++) {
           const col = columnNumbers[i];
           const colIndex = col - minCol;
-          const value = processMergedCellValueOptimized(headerValues[row][colIndex], row + 1, col, headerMergedInfo);
+          const value = processMergedCellValueOptimized(headerValues[row][colIndex], row + 1, col, headerMergedInfo, sheet);
           rowData.push(value);
         }
         result.headerData.push(rowData);
@@ -218,7 +218,7 @@ function extractSpecifiedColumnsFullyOptimized(sheet, columnNumbers) {
           for (let i = 0; i < columnNumbers.length; i++) {
             const col = columnNumbers[i];
             const colIndex = col - minCol;
-            const value = processMergedCellValueOptimized(rowData[colIndex], actualRow, col, bodyMergedInfo);
+            const value = processMergedCellValueOptimized(rowData[colIndex], actualRow, col, bodyMergedInfo, sheet);
             processedRow.push(value);
           }
           
@@ -302,7 +302,7 @@ function extractFColumnDataFullyOptimized(sheet) {
         for (let col = 0; col < headerValues[row].length; col++) {
           const actualRow = row + 1;
           const actualCol = startCol + col;
-          const value = processMergedCellValueOptimized(headerValues[row][col], actualRow, actualCol, headerMergedInfo);
+          const value = processMergedCellValueOptimized(headerValues[row][col], actualRow, actualCol, headerMergedInfo, sheet);
           rowData.push(value);
         }
         result.headerData.push(rowData);
@@ -324,7 +324,7 @@ function extractFColumnDataFullyOptimized(sheet) {
           
           for (let col = 0; col < rowData.length; col++) {
             const actualCol = startCol + col;
-            const value = processMergedCellValueOptimized(rowData[col], actualRow, actualCol, bodyMergedInfo);
+            const value = processMergedCellValueOptimized(rowData[col], actualRow, actualCol, bodyMergedInfo, sheet);
             processedRow.push(value);
           }
           
@@ -399,14 +399,15 @@ function getMergedCellInfoForRange(mergedRanges, startRow, endRow, startCol, end
 }
 
 /**
- * 結合セル値を処理（高速版）
+ * 結合セル値を処理（高速版・取り消し線除外対応）
  * @param {*} value - セルの値
  * @param {number} row - 行番号
  * @param {number} col - 列番号
  * @param {Object} mergedInfo - 結合セル情報
+ * @param {Sheet} sheet - スプレッドシート（取り消し線チェック用）
  * @returns {*} 処理された値
  */
-function processMergedCellValueOptimized(value, row, col, mergedInfo) {
+function processMergedCellValueOptimized(value, row, col, mergedInfo, sheet = null) {
   try {
     const key = `${row}_${col}`;
     const mergeData = mergedInfo[key];
@@ -414,6 +415,12 @@ function processMergedCellValueOptimized(value, row, col, mergedInfo) {
     if (mergeData && !mergeData.isTopLeft) {
       // 結合セルの左上以外は空文字を返す
       return '';
+    }
+    
+    // 取り消し線除外処理を適用
+    if (sheet && value && value.toString().trim() !== '') {
+      const cleanValue = checkAndCleanStrikethroughCell(sheet, row, col);
+      return cleanValue;
     }
     
     return value || '';
@@ -424,7 +431,7 @@ function processMergedCellValueOptimized(value, row, col, mergedInfo) {
 }
 
 /**
- * 結合セル値を取得（高速版）
+ * 結合セル値を取得（高速版・取り消し線除外対応）
  * @param {Sheet} sheet - スプレッドシート
  * @param {number} row - 行番号
  * @param {number} col - 列番号
@@ -449,7 +456,7 @@ function getMergedCellValueWithMergeInfoOptimized(sheet, row, col) {
         
         // 結合セルの左上のセルのみ値を取得
         if (row === startRow && col === startCol) {
-          const value = sheet.getRange(row, col).getValue();
+          const value = checkAndCleanStrikethroughCell(sheet, row, col);
           setPerformanceCache(cacheKey, value, CONFIG.PERFORMANCE.CACHE_TTL);
           return value;
         } else {
@@ -460,8 +467,8 @@ function getMergedCellValueWithMergeInfoOptimized(sheet, row, col) {
       }
     }
     
-    // 通常のセルの値を取得
-    const value = sheet.getRange(row, col).getValue();
+    // 通常のセルの値を取得（取り消し線除外処理付き）
+    const value = checkAndCleanStrikethroughCell(sheet, row, col);
     setPerformanceCache(cacheKey, value, CONFIG.PERFORMANCE.CACHE_TTL);
     return value;
     
@@ -523,7 +530,7 @@ function getActualLastColumnOptimized(sheet, startCol, maxCol) {
 }
 
 /**
- * 列にデータがあるかチェック（高速版）
+ * 列にデータがあるかチェック（高速版・取り消し線除外対応）
  * @param {Sheet} sheet - スプレッドシート
  * @param {number} col - 列番号
  * @param {number} lastRow - 最終行
@@ -541,7 +548,7 @@ function hasDataInColumnOptimized(sheet, col, lastRow) {
     // 4行目以降のデータをチェック（ヘッダー行は除外）
     let hasData = false;
     for (let row = 4; row <= lastRow; row++) {
-      const value = sheet.getRange(row, col).getValue();
+      const value = checkAndCleanStrikethroughCell(sheet, row, col);
       if (value && value !== '') {
         hasData = true;
         break;
@@ -619,6 +626,120 @@ function outputColumnDataToInfoExtractionTabFullyOptimized(extractedData) {
     console.log(`❌ 列データ出力エラー: ${error.message}`);
     throw error;
   }
+}
+
+/**
+ * セルの書式情報を含めて取り消し線をチェック（Google Sheets用）
+ * @param {Sheet} sheet - スプレッドシート
+ * @param {number} row - 行番号
+ * @param {number} col - 列番号
+ * @returns {string} クリーンなテキスト（取り消し線は除外）
+ */
+function checkAndCleanStrikethroughCell(sheet, row, col) {
+  try {
+    const range = sheet.getRange(row, col);
+    const value = range.getValue();
+    
+    if (!value || value.toString().trim().length === 0) {
+      return "";
+    }
+    
+    // Google Sheetsの書式情報を取得
+    const textStyle = range.getTextStyle();
+    
+    // 取り消し線が設定されているかチェック
+    if (textStyle && textStyle.isStrikethrough && textStyle.isStrikethrough()) {
+      console.log(`🚫 取り消し線セル検出: ${getColumnLetter(col)}${row} = '${value}' (除外)`);
+      return ""; // 取り消し線が設定されている場合は空文字を返す
+    }
+    
+    // リッチテキストの場合の処理
+    const richTextValue = range.getRichTextValue();
+    if (richTextValue) {
+      const runs = richTextValue.getRuns();
+      let cleanText = "";
+      
+      for (let i = 0; i < runs.length; i++) {
+        const run = runs[i];
+        const runText = run.getText();
+        const runStyle = run.getTextStyle();
+        
+        // この部分が取り消し線でない場合のみ追加
+        if (!runStyle || !runStyle.isStrikethrough || !runStyle.isStrikethrough()) {
+          cleanText += runText;
+        } else {
+          console.log(`🚫 取り消し線テキスト検出: '${runText}' (除外)`);
+        }
+      }
+      
+      return removeStrikethroughText(cleanText);
+    }
+    
+    // 通常のテキストの場合
+    return removeStrikethroughText(value.toString());
+    
+  } catch (error) {
+    console.log(`⚠️ セル書式チェックエラー: ${error.toString()}`);
+    // エラーの場合は通常の取り消し線除去を実行
+    return removeStrikethroughText(value ? value.toString() : "");
+  }
+}
+
+/**
+ * 取り消し線テキストを除去（強化版）
+ * @param {string} text - 処理対象テキスト
+ * @returns {string} クリーンなテキスト
+ */
+function removeStrikethroughText(text) {
+  try {
+    if (!text || text.toString().trim().length === 0) {
+      return "";
+    }
+    
+    let cleanText = text.toString();
+    
+    // マークダウン形式の取り消し線を除去
+    cleanText = cleanText.replace(/~~(.+?)~~/g, '');
+    
+    // HTMLタグの取り消し線を除去
+    cleanText = cleanText.replace(/<s>(.+?)<\/s>/gi, '');
+    cleanText = cleanText.replace(/<strike>(.+?)<\/strike>/gi, '');
+    cleanText = cleanText.replace(/<del>(.+?)<\/del>/gi, '');
+    
+    // Unicode取り消し線文字を除去
+    cleanText = cleanText.replace(/[\u0336]/g, ''); // 取り消し線文字
+    cleanText = cleanText.replace(/[\u0335]/g, ''); // 短い取り消し線
+    
+    // 特定の文字パターンを除去（例：[削除]、(削除)、※削除など）
+    cleanText = cleanText.replace(/\[削除\]/g, '');
+    cleanText = cleanText.replace(/\(削除\)/g, '');
+    cleanText = cleanText.replace(/※削除/g, '');
+    cleanText = cleanText.replace(/削除：/g, '');
+    
+    // 空白の正規化
+    cleanText = cleanText.replace(/\s+/g, ' ').trim();
+    
+    return cleanText;
+    
+  } catch (error) {
+    console.log(`⚠️ 取り消し線除去エラー: ${error.toString()}`);
+    return text.toString();
+  }
+}
+
+/**
+ * 列番号を列文字に変換
+ * @param {number} columnNumber - 列番号（1から開始）
+ * @returns {string} 列文字（A, B, C...）
+ */
+function getColumnLetter(columnNumber) {
+  let result = "";
+  while (columnNumber > 0) {
+    columnNumber--;
+    result = String.fromCharCode(65 + (columnNumber % 26)) + result;
+    columnNumber = Math.floor(columnNumber / 26);
+  }
+  return result;
 }
 
 
