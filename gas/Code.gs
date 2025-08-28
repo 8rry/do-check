@@ -56,6 +56,13 @@ function main() {
     } catch (cleanupError) {
       console.log(`⚠️ 一時ファイル削除でエラーが発生しましたが、処理は継続します: ${cleanupError.message}`);
     }
+
+    // スタイル処理
+    SpreadsheetApp.getActiveSheet()
+    .getDataRange()
+    .setFontSize(9)
+    .setFontFamily("Noto Sans JP")
+    .setVerticalAlignment("middle");
     
     const endTime = new Date();
     const processingTime = endTime - startTime;
