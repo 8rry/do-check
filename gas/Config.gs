@@ -122,7 +122,8 @@ const CONFIG = {
     
     // 配送会社
     '配送会社': {
-      keywords: ['発送', '発送方法']
+      keywords: ['発送方法', '配送方法等'],
+      searchType: 'or',  // OR検索を指定
     },
     
     // 寄附金額1

@@ -39,17 +39,19 @@ function clearInfoExtractionTab() {
     // 2. B6セルのクリア処理は削除（問題が発生するため）
     console.log('ℹ️ B6セルのクリア処理はスキップ（セル結合の問題を回避）');
     
-    // 3. A8:CQ200のデータを削除
+    // 3. A8:CQ200のデータを削除（条件付き書式を保持）
     console.log('🗑️ データ領域(A8:CQ200)を削除中...');
     const dataRange = sheet.getRange(8, 1, 193, 87); // A8:CQ200 (8行目から193行分、1列目から87列分)
-    dataRange.clearContent();
-    console.log('✅ データ領域の削除完了');
+    // clearContent()ではなくsetValue('')を使用して条件付き書式を保持
+    dataRange.setValue('');
+    console.log('✅ データ領域の削除完了（条件付き書式保持）');
     
-    // 4. D4:CQ6のデータを削除
+    // 4. D4:CQ6のデータを削除（条件付き書式を保持）
     console.log('🗑️ ヘッダー領域(D4:CQ6)を削除中...');
     const headerRange = sheet.getRange(4, 4, 3, 87); // D4:CQ6 (4行目から3行分、4列目から87列分)
-    headerRange.clearContent();
-    console.log('✅ ヘッダー領域の削除完了');
+    // clearContent()ではなくsetValue('')を使用して条件付き書式を保持
+    headerRange.setValue('');
+    console.log('✅ ヘッダー領域の削除完了（条件付き書式保持）');
     
     console.log('✅ 情報抽出タブのクリア完了');
     return true;
@@ -81,8 +83,9 @@ function clearDoOutputTab() {
     
     if (lastRow > 1) {
       const dataRange = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn());
-      dataRange.clearContent();
-      console.log(`✅ 2行目から${lastRow}行目まで削除完了`);
+      // clearContent()ではなくsetValue('')を使用して条件付き書式を保持
+      dataRange.setValue('');
+      console.log(`✅ 2行目から${lastRow}行目まで削除完了（条件付き書式保持）`);
     } else {
       console.log('ℹ️ 削除対象のデータがありません');
     }
@@ -117,8 +120,9 @@ function clearDoOutputSubscriptionTab() {
     
     if (lastRow > 1) {
       const dataRange = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn());
-      dataRange.clearContent();
-      console.log(`✅ 2行目から${lastRow}行目まで削除完了`);
+      // clearContent()ではなくsetValue('')を使用して条件付き書式を保持
+      dataRange.setValue('');
+      console.log(`✅ 2行目から${lastRow}行目まで削除完了（条件付き書式保持）`);
     } else {
       console.log('ℹ️ 削除対象のデータがありません');
     }
