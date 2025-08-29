@@ -9,7 +9,13 @@
  */
 function loadFolderPath() {
   try {
-    const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+    // 現在アクティブなスプレッドシートを取得
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) {
+      console.log('⚠️ アクティブなスプレッドシートが見つかりません');
+      return null;
+    }
+    
     const sheet = ss.getSheetByName(CONFIG.SHEETS.INFO_EXTRACTION);
     const folderPath = sheet.getRange(CONFIG.CELLS.FOLDER_PATH).getValue();
     
@@ -89,7 +95,13 @@ function findMunicipalityFolder(folderKey) {
     
     console.log(`🔍 自治体フォルダ検索開始: ${actualFolderKey}`);
     
-    const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+    // 現在アクティブなスプレッドシートを取得
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) {
+      console.log('⚠️ アクティブなスプレッドシートが見つかりません');
+      return null;
+    }
+    
     const sheet = ss.getSheetByName(CONFIG.SHEETS.MUNICIPALITY_FOLDERS);
     
     if (!sheet) {
@@ -1342,6 +1354,141 @@ function configurePerformanceSettings() {
   } catch (error) {
     console.log(`❌ パフォーマンス設定エラー: ${error.message}`);
   }
+}
+
+/**
+ * 進捗状況表示機能
+ * ログが見れない人でも進捗状況が分かるように、B6セルに現在の処理状況を表示
+ */
+
+/**
+ * 進捗状況をB6セルに表示
+ * @param {string} message - 表示するメッセージ
+ * @param {string} type - メッセージタイプ（'info', 'processing', 'success', 'error', 'complete'）
+ */
+function updateProgressStatus(message, type = 'info') {
+  try {
+    // 現在アクティブなスプレッドシートを取得
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) {
+      console.log('⚠️ アクティブなスプレッドシートが見つかりません');
+      return;
+    }
+    
+    const sheet = ss.getSheetByName(CONFIG.SHEETS.INFO_EXTRACTION);
+    
+    if (!sheet) {
+      console.log('⚠️ 情報抽出タブが見つからないため、進捗状況を表示できません');
+      return;
+    }
+    
+    // B6セルに進捗状況を表示
+    const progressCell = sheet.getRange('B6');
+    progressCell.setValue(message);
+    
+    // メッセージタイプに応じてセルのスタイルを設定
+    switch (type) {
+      case 'processing':
+        progressCell.setBackground('#FFF2CC'); // 薄い黄色（処理中）
+        progressCell.setFontColor('#E6B800');
+        break;
+      case 'success':
+        progressCell.setBackground('#D5E8D4'); // 薄い緑（成功）
+        progressCell.setFontColor('#82B366');
+        break;
+      case 'error':
+        progressCell.setBackground('#F8CECC'); // 薄い赤（エラー）
+        progressCell.setFontColor('#B85450');
+        break;
+      case 'complete':
+        progressCell.setBackground('#D5E8D4'); // 薄い緑（完了）
+        progressCell.setFontColor('#82B366');
+        break;
+      default:
+        progressCell.setBackground('#E1D5E7'); // 薄い紫（情報）
+        progressCell.setFontColor('#9673A6');
+    }
+    
+    // フォントサイズとスタイルを設定
+    progressCell.setFontSize(11);
+    progressCell.setFontWeight('bold');
+    progressCell.setHorizontalAlignment('center');
+    
+    console.log(`📊 進捗状況更新: ${message} (スプレッドシート: ${ss.getName()})`);
+    
+  } catch (error) {
+    console.log(`❌ 進捗状況表示エラー: ${error.message}`);
+  }
+}
+
+/**
+ * 進捗状況をクリア
+ */
+function clearProgressStatus() {
+  try {
+    console.log('🗑️ 進捗状況クリア処理開始');
+    
+    // 現在アクティブなスプレッドシートを取得
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) {
+      console.log('⚠️ アクティブなスプレッドシートが見つかりません');
+      return;
+    }
+    
+    const sheet = ss.getSheetByName(CONFIG.SHEETS.INFO_EXTRACTION);
+    
+    if (!sheet) {
+      console.log('⚠️ 情報抽出タブが見つからないため、進捗状況をクリアできません');
+      return;
+    }
+    
+    // B6セルの現在の値を確認
+    const progressCell = sheet.getRange('B6');
+    const currentValue = progressCell.getValue();
+    console.log(`📊 B6セルの現在の値: '${currentValue}'`);
+    
+    // B6セルの内容とスタイルをクリア
+    progressCell.clearContent();
+    progressCell.clearFormat();
+    
+    // 強制的に空文字を設定
+    progressCell.setValue('');
+    
+    // クリア後の値を確認
+    const clearedValue = progressCell.getValue();
+    console.log(`📊 B6セルのクリア後の値: '${clearedValue}'`);
+    
+    // 背景色も白に設定
+    progressCell.setBackground('white');
+    progressCell.setFontColor('black');
+    
+    console.log('🗑️ 進捗状況をクリアしました（強制クリア完了）');
+    
+  } catch (error) {
+    console.log(`❌ 進捗状況クリアエラー: ${error.message}`);
+  }
+}
+
+/**
+ * 処理開始前の進捗状況を表示
+ */
+function showWaitingStatus() {
+  updateProgressStatus('🔄 処理待機中', 'info');
+}
+
+/**
+ * 処理完了の進捗状況を表示
+ */
+function showCompleteStatus() {
+  updateProgressStatus('🎉 全処理完了', 'complete');
+}
+
+/**
+ * エラー状況の進捗状況を表示
+ * @param {string} errorMessage - エラーメッセージ
+ */
+function showErrorStatus(errorMessage) {
+  updateProgressStatus(`❌ エラー: ${errorMessage}`, 'error');
 }
 
 

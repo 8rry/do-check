@@ -101,7 +101,8 @@ const CONFIG = {
     // 提供価格(税込)1（OR検索）
     '提供価格(税込)1': {
       keywords: ['商品代金', '提供価格'],
-      searchType: 'or'  // OR検索を指定
+      searchType: 'or',  // OR検索を指定
+      priority: 'new'  // 新を優先
     },
     
     // 固定送料1

@@ -20,6 +20,9 @@ function main() {
     console.log('=== 返礼品情報整形処理開始 ===');
     const startTime = new Date();
     
+    // 処理開始前の進捗状況を表示
+    showWaitingStatus();
+    
     // ファイルパスからファイルIDを解決
     const fileInfo = resolveFilePathToFileId();
     const { fileId, fileName } = fileInfo;
@@ -27,11 +30,14 @@ function main() {
     console.log(`📁 処理開始: ${fileName}`);
     
     // Phase 1: 基本データ抽出
+    updateProgressStatus('🔄 Phase 1: 基本データ抽出中...', 'processing');
     const phase1Result = executePhase1(fileId, fileName);
     
     console.log(`✅ Phase 1完了: ${phase1Result.data.length}行抽出`);
+    updateProgressStatus(`✅ Phase 1完了: ${phase1Result.data.length}行抽出`, 'success');
     
     // Phase 2と3を順次実行
+    updateProgressStatus('🔄 Phase 2と3: データ抽出・紐付け中...', 'processing');
     const parallelResults = executePhasesInParallel(phase1Result.sheet);
     
     // 処理結果の表示
@@ -68,8 +74,13 @@ function main() {
     console.log(`⚡ 処理完了: ${processingTime}ms`);
     console.log('=== 処理完了 ===');
     
+    // 全処理完了の進捗状況を表示
+    showCompleteStatus();
+    
   } catch (error) {
     console.log(`❌ メイン処理エラー: ${error.message}`);
+    // エラー状況の進捗状況を表示
+    showErrorStatus(error.message);
     throw error;
   }
 }
@@ -134,6 +145,9 @@ function executePhase4Standalone() {
     console.log('=== Phase 4: Doへの書き出し開始 ===');
     const startTime = new Date();
     
+    // Phase 4開始の進捗状況を表示
+    updateProgressStatus('🔄 Phase 4: Do書き出し中...', 'processing');
+    
     // Phase 4の実行
     const phase4Result = executePhase4();
     
@@ -142,14 +156,21 @@ function executePhase4Standalone() {
       const processingTime = endTime - startTime;
       console.log(`✅ Phase 4完了: ${processingTime}ms`);
       console.log('=== Phase 4: Doへの書き出し完了 ===');
+      
+      // Phase 4完了の進捗状況を表示
+      updateProgressStatus('✅ Phase 4完了: Do書き出し完了', 'success');
     } else {
       console.log('❌ Phase 4でエラーが発生しました');
+      // Phase 4エラーの進捗状況を表示
+      showErrorStatus('Phase 4でエラーが発生しました');
     }
     
     return phase4Result;
     
   } catch (error) {
     console.log(`❌ Phase 4実行エラー: ${error.message}`);
+    // エラー状況の進捗状況を表示
+    showErrorStatus(`Phase 4実行エラー: ${error.message}`);
     throw error;
   }
 }
@@ -210,6 +231,9 @@ function executePhase5Standalone() {
     console.log('=== Phase 5: データクリア処理開始 ===');
     const startTime = new Date();
     
+    // Phase 5開始の進捗状況を表示
+    updateProgressStatus('🔄 Phase 5: データクリア中...', 'processing');
+    
     // Phase 5の実行
     const phase5Result = executePhase5();
     
@@ -218,14 +242,22 @@ function executePhase5Standalone() {
       const processingTime = endTime - startTime;
       console.log(`✅ Phase 5完了: ${processingTime}ms`);
       console.log('=== データクリア処理完了 ===');
+      
+      // Phase 5完了後に完了メッセージを表示（セル結合は保持）
+      updateProgressStatus('✅ Phase 5完了: データクリア完了！', 'success');
+      console.log('✅ 完了メッセージを表示しました');
     } else {
       console.log('❌ Phase 5でエラーが発生しました');
+      // Phase 5エラーの進捗状況を表示
+      showErrorStatus('Phase 5でエラーが発生しました');
     }
     
     return phase5Result;
     
   } catch (error) {
     console.log(`❌ Phase 5実行エラー: ${error.message}`);
+    // エラー状況の進捗状況を表示
+    showErrorStatus(`Phase 5実行エラー: ${error.message}`);
     throw error;
   }
 }
@@ -258,6 +290,11 @@ function executePhase5() {
       console.log('✅ Do書き出し用(定期)タブのクリア完了');
     } else {
       console.log('❌ Do書き出し用(定期)タブのクリアでエラーが発生しました');
+    }
+    
+    // 全タブのクリアが完了
+    if (infoExtractionResult && doOutputResult && doOutputSubscriptionResult) {
+      console.log('✅ 全タブのクリアが完了しました');
     }
     
     return infoExtractionResult && doOutputResult && doOutputSubscriptionResult;

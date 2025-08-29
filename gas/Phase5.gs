@@ -36,10 +36,8 @@ function clearInfoExtractionTab() {
     checkboxRange.setValue(false);
     console.log('✅ チェックボックスの設定完了');
     
-    // 2. B6を削除
-    console.log('🗑️ B6セルの内容を削除中...');
-    sheet.getRange('B6').clearContent();
-    console.log('✅ B6セルの削除完了');
+    // 2. B6セルのクリア処理は削除（問題が発生するため）
+    console.log('ℹ️ B6セルのクリア処理はスキップ（セル結合の問題を回避）');
     
     // 3. A8:CQ200のデータを削除
     console.log('🗑️ データ領域(A8:CQ200)を削除中...');
@@ -140,7 +138,13 @@ function clearDoOutputSubscriptionTab() {
  */
 function getInfoExtractionSheet() {
   try {
-    const spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+    // 現在アクティブなスプレッドシートを取得
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    if (!spreadsheet) {
+      console.log('⚠️ アクティブなスプレッドシートが見つかりません');
+      return null;
+    }
+    
     const sheet = spreadsheet.getSheetByName(CONFIG.SHEETS.INFO_EXTRACTION);
     return sheet;
   } catch (error) {
@@ -155,7 +159,13 @@ function getInfoExtractionSheet() {
  */
 function getDoOutputSheet() {
   try {
-    const spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+    // 現在アクティブなスプレッドシートを取得
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    if (!spreadsheet) {
+      console.log('⚠️ アクティブなスプレッドシートが見つかりません');
+      return null;
+    }
+    
     const sheet = spreadsheet.getSheetByName(CONFIG.SHEETS.DO_EXPORT);
     return sheet;
   } catch (error) {
@@ -170,7 +180,13 @@ function getDoOutputSheet() {
  */
 function getDoOutputSubscriptionSheet() {
   try {
-    const spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+    // 現在アクティブなスプレッドシートを取得
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    if (!spreadsheet) {
+      console.log('⚠️ アクティブなスプレッドシートが見つかりません');
+      return null;
+    }
+    
     const sheet = spreadsheet.getSheetByName(CONFIG.SHEETS.DO_EXPORT_REGULAR);
     return sheet;
   } catch (error) {

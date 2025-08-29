@@ -402,7 +402,12 @@ function outputProductDataToInfoExtractionTabOptimized(extractedData) {
   try {
     console.log('🚀 情報抽出タブに商品データを出力開始（超高速版）');
     
-    const spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+    // 現在アクティブなスプレッドシートを取得
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    if (!spreadsheet) {
+      console.log('⚠️ アクティブなスプレッドシートが見つかりません');
+      return null;
+    }
     const infoSheet = spreadsheet.getSheetByName(CONFIG.SHEETS.INFO_EXTRACTION);
     
     if (!infoSheet) {

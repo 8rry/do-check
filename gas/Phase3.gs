@@ -66,7 +66,13 @@ function extractInfoExtractionData() {
   try {
     console.log('🔍 情報抽出タブからデータ取得開始');
     
-    const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+    // 現在アクティブなスプレッドシートを取得
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) {
+      console.log('⚠️ アクティブなスプレッドシートが見つかりません');
+      return [];
+    }
+    
     const sheet = ss.getSheetByName(CONFIG.SHEETS.INFO_EXTRACTION);
     
     if (!sheet) {
@@ -315,7 +321,18 @@ function outputToInfoExtractionTab(mappingResults) {
   try {
     console.log('📤 情報抽出タブのA列にDo項目を出力開始');
     
-    const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+    // 現在アクティブなスプレッドシートを取得
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) {
+      console.log('⚠️ アクティブなスプレッドシートが見つかりません');
+      return {
+        success: false,
+        error: 'アクティブなスプレッドシートが見つかりません',
+        outputRows: 0,
+        outputRange: ''
+      };
+    }
+    
     const sheet = ss.getSheetByName(CONFIG.SHEETS.INFO_EXTRACTION);
     
     if (!sheet) {

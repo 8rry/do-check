@@ -80,7 +80,13 @@ function loadColumnSpecOptimized() {
     
     console.log(`🔍 列指定読み込み開始: セル${CONFIG.CELLS.COLUMN_SPEC}`);
     
-    const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+    // 現在アクティブなスプレッドシートを取得
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) {
+      console.log('⚠️ アクティブなスプレッドシートが見つかりません');
+      return '';
+    }
+    
     const sheet = ss.getSheetByName(CONFIG.SHEETS.INFO_EXTRACTION);
     
     if (!sheet) {
@@ -593,7 +599,13 @@ function outputColumnDataToInfoExtractionTabFullyOptimized(extractedData) {
       return;
     }
     
-    const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+    // 現在アクティブなスプレッドシートを取得
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) {
+      console.log('⚠️ アクティブなスプレッドシートが見つかりません');
+      return;
+    }
+    
     const sheet = ss.getSheetByName(CONFIG.SHEETS.INFO_EXTRACTION);
     
     console.log(`📝 列データを情報抽出タブに出力開始（完全超高速版）`);
