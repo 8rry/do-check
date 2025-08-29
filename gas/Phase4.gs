@@ -84,15 +84,27 @@ function determineProductTypes(checkedColumns) {
     const productTypes = {};
     
     checkedColumns.forEach(col => {
-      // A列の「商品名称」行の値を確認（18行目）
-      const productNameCell = infoSheet.getRange(18, col);
-      const productName = productNameCell.getValue();
+      // 各列の「商品名称」項目の値を確認
+      let productName = null;
+      
+      // A列の項目名を順次チェックして「商品名称」を探す
+      for (let row = 8; row <= 200; row++) {
+        const itemName = infoSheet.getRange(row, 1).getValue(); // A列の項目名
+        if (itemName === '商品名称') {
+          // 商品名称項目が見つかったら、その列の値を取得
+          productName = infoSheet.getRange(row, col).getValue();
+          console.log(`🔍 列${col}の商品名称: "${productName}"`);
+          break;
+        }
+      }
       
       // 「定期」文字が含まれているかチェック
       if (productName && productName.toString().includes('定期')) {
         productTypes[col] = 'subscription'; // 定期便
+        console.log(`✅ 列${col}: 定期便として判定 "${productName}"`);
       } else {
         productTypes[col] = 'single'; // 単一商品
+        console.log(`ℹ️ 列${col}: 単一商品として判定 "${productName}"`);
       }
     });
     
