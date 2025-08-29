@@ -685,11 +685,40 @@ function outputToSingleTab(tab, data) {
     const lastRow = tab.getLastRow();
     const targetRow = lastRow + 1;
     
+    // 出力用のデータを作成（固定値と外部シート参照を含む）
+    const outputData = { ...data };
+    
+    // 固定値設定
+    outputData['寄附金額(終了)1'] = '2099/12/31';
+    outputData['在庫数'] = '99999';
+    outputData['アラート在庫数'] = '1';
+    outputData['出荷可能日フラグ(月)'] = '有';
+    outputData['出荷可能日フラグ(火)'] = '有';
+    outputData['出荷可能日フラグ(水)'] = '有';
+    outputData['出荷可能日フラグ(木)'] = '有';
+    outputData['出荷可能日フラグ(金)'] = '有';
+    outputData['出荷可能日フラグ(土)'] = '有';
+    outputData['出荷可能日フラグ(日)'] = '有';
+    outputData['出荷可能日フラグ(祝日)'] = '有';
+    
+    // 外部シート参照設定
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const infoSheet = ss.getSheetByName('情報抽出');
+    if (infoSheet) {
+      const keyValue = infoSheet.getRange('B1').getValue();
+      const externalValue = getExternalPriceValue(keyValue);
+      if (externalValue) {
+        outputData['寄附金額(開始)1'] = externalValue;
+        outputData['提供価格(開始)1'] = externalValue;
+        console.log(`✅ 単品: 寄附金額(開始)1と提供価格(開始)1を外部シートの値に設定: "${externalValue}"`);
+      }
+    }
+    
     // 項目名をキーとして適切な列にデータを配置
-    Object.keys(data).forEach(itemName => {
+    Object.keys(outputData).forEach(itemName => {
       const columnIndex = findColumnIndexByItemName(tab, itemName);
       if (columnIndex > 0) {
-        tab.getRange(targetRow, columnIndex).setValue(data[itemName]);
+        tab.getRange(targetRow, columnIndex).setValue(outputData[itemName]);
       }
     });
     
