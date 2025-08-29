@@ -253,7 +253,32 @@ function convertShippingType(shippingType) {
 function normalizeDateFormat(dateText) {
   if (!dateText) return '';
   
+  // JavaScriptのDateオブジェクトの場合
+  if (dateText instanceof Date) {
+    const year = dateText.getFullYear();
+    const month = String(dateText.getMonth() + 1).padStart(2, '0');
+    const day = String(dateText.getDate()).padStart(2, '0');
+    console.log(`🔍 Dateオブジェクト変換: "${dateText}" → "${year}/${month}/${day}"`);
+    return `${year}/${month}/${day}`;
+  }
+  
   const text = dateText.toString();
+  
+  // JavaScriptのDate文字列形式（Wed Mar 18 2026 16:00:00 GMT+0900 (日本標準時)など）
+  if (text.includes('GMT') || text.includes('UTC') || text.includes('GMT+') || text.includes('GMT-')) {
+    try {
+      const date = new Date(text);
+      if (!isNaN(date.getTime())) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        console.log(`🔍 Date文字列変換: "${text}" → "${year}/${month}/${day}"`);
+        return `${year}/${month}/${day}`;
+      }
+    } catch (error) {
+      console.log(`⚠️ Date文字列変換エラー: "${text}"`, error);
+    }
+  }
   
   // yyyy年mm月dd日 → yyyy/mm/dd
   const japaneseMatch = text.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
@@ -273,6 +298,12 @@ function normalizeDateFormat(dateText) {
     return `${year}/${month}/${day}`;
   }
   
+  // yyyy/mm/dd → そのまま返す（既に正しい形式）
+  const slashMatch = text.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
+  if (slashMatch) {
+    return text; // 既に正しい形式なのでそのまま返す
+  }
+  
   // 上旬/下旬 → 具体的日付
   const earlyMatch = text.match(/(\d{4})年(\d{1,2})月上旬/);
   if (earlyMatch) {
@@ -289,6 +320,8 @@ function normalizeDateFormat(dateText) {
     return `${year}/${month}/${lastDay}`;
   }
   
+  // その他の形式の場合はログ出力して元の値を返す
+  console.log(`⚠️ 未対応の日付形式: "${text}" (型: ${typeof dateText})`);
   return dateText;
 }
 
@@ -621,6 +654,225 @@ function determineSubscriptionType(productName) {
 }
 
 /**
+ * 期間処理（受付期間・発送期間）
+ * @param {Object} cleanedData - クレンジングされたデータ
+ * @returns {Object} 期間処理後のデータ
+ */
+function processPeriodData(cleanedData) {
+  try {
+    const processedData = {};
+    
+    Object.keys(cleanedData).forEach(col => {
+      const columnData = cleanedData[col];
+      const processedColumnData = { ...columnData.data };
+      
+      // 受付期間の処理
+      const receptionStart = processedColumnData['受付期間(開始)'];
+      const receptionEnd = processedColumnData['受付期間(終了)'];
+      
+      if (receptionStart || receptionEnd) {
+        const receptionResult = processPeriod(
+          receptionStart, 
+          receptionEnd, 
+          '受付期間(開始)', 
+          '受付期間(終了)', 
+          '受付期間種別'
+        );
+        
+        // 処理結果を反映
+        processedColumnData['受付期間(開始)'] = receptionResult.startDate;
+        processedColumnData['受付期間(終了)'] = receptionResult.endDate;
+        processedColumnData['受付期間種別'] = receptionResult.type;
+        
+        console.log(`🔍 受付期間処理完了: 開始="${receptionResult.startDate}", 終了="${receptionResult.endDate}", 種別="${receptionResult.type}"`);
+      }
+      
+      // 発送期間の処理
+      const shippingStart = processedColumnData['発送期間(開始)'];
+      const shippingEnd = processedColumnData['発送期間(終了)'];
+      
+      if (shippingStart || shippingEnd) {
+        const shippingResult = processPeriod(
+          shippingStart, 
+          shippingEnd, 
+          '発送期間(開始)', 
+          '発送期間(終了)', 
+          '発送期間種別'
+        );
+        
+        // 処理結果を反映
+        processedColumnData['発送期間(開始)'] = shippingResult.startDate;
+        processedColumnData['発送期間(終了)'] = shippingResult.endDate;
+        processedColumnData['発送期間種別'] = shippingResult.type;
+        
+        console.log(`🔍 発送期間処理完了: 開始="${shippingResult.startDate}", 終了="${shippingResult.endDate}", 種別="${shippingResult.type}"`);
+      }
+      
+      processedData[col] = {
+        type: columnData.type,
+        data: processedColumnData
+      };
+    });
+    
+    console.log(`📅 期間処理完了: ${Object.keys(processedData).length}列分の期間データを処理`);
+    return processedData;
+    
+  } catch (error) {
+    console.error('❌ 期間処理エラー:', error);
+    return cleanedData; // エラーの場合は元のデータを返す
+  }
+}
+
+/**
+ * 個別期間の処理
+ * @param {string} startDate - 開始日
+ * @param {string} endDate - 終了日
+ * @param {string} startField - 開始日フィールド名
+ * @param {string} endField - 終了日フィールド名
+ * @param {string} typeField - 種別フィールド名
+ * @returns {Object} 処理結果
+ */
+function processPeriod(startDate, endDate, startField, endField, typeField) {
+  const result = {
+    startDate: '',
+    endDate: '',
+    type: ''
+  };
+  
+  // 両方に「通年」キーワードが含まれている場合
+  if (isYearRound(startDate) && isYearRound(endDate)) {
+    result.type = '通年扱い';
+    result.startDate = '';
+    result.endDate = '';
+    console.log(`  - 両方「通年」: ${typeField}に「通年扱い」を設定`);
+  }
+  // どちらかに「通年」キーワードが含まれている場合
+  else if (isYearRound(startDate) || isYearRound(endDate)) {
+    result.type = '季節限定扱い';
+    
+    if (isYearRound(startDate)) {
+      // 開始日が「通年」の場合、今日の日付を設定
+      result.startDate = getTodayDate();
+      result.endDate = normalizeDateFormat(endDate);
+      console.log(`  - 開始日「通年」: 開始日を今日の日付に設定`);
+    } else {
+      // 終了日が「通年」の場合、今日の日付を設定
+      result.startDate = normalizeDateFormat(startDate);
+      result.endDate = getTodayDate();
+      console.log(`  - 終了日「通年」: 終了日を今日の日付に設定`);
+    }
+  }
+  // 両方に日付が入っている場合
+  else if (startDate && endDate) {
+    result.type = '季節限定扱い';
+    result.startDate = normalizeDateFormat(startDate);
+    result.endDate = normalizeDateFormat(endDate);
+    console.log(`  - 両方日付: ${typeField}に「季節限定扱い」を設定`);
+  }
+  // どちらか一方に日付が入っている場合
+  else if (startDate || endDate) {
+    result.type = '季節限定扱い';
+    result.startDate = startDate ? normalizeDateFormat(startDate) : '';
+    result.endDate = endDate ? normalizeDateFormat(endDate) : '';
+    console.log(`  - 片方日付: ${typeField}に「季節限定扱い」を設定`);
+  }
+  
+  return result;
+}
+
+/**
+ * 「通年」キーワードの判定
+ * @param {string} text - 判定対象テキスト
+ * @returns {boolean} 通年キーワードが含まれているか
+ */
+function isYearRound(text) {
+  if (!text) return false;
+  
+  const yearRoundKeywords = ['通年', '順次', '随時', '常時'];
+  const textStr = text.toString().toLowerCase();
+  
+  return yearRoundKeywords.some(keyword => textStr.includes(keyword));
+}
+
+/**
+ * 今日の日付を取得（yyyy/mm/dd形式）
+ * @returns {string} 今日の日付
+ */
+function getTodayDate() {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${year}/${month}/${day}`;
+}
+
+/**
+ * 配送会社名を変換
+ * @param {string} shippingCompany - 元の配送会社名
+ * @returns {string} 変換後の配送会社名
+ */
+function convertShippingCompany(shippingCompany) {
+  if (!shippingCompany) return '';
+  
+  const company = shippingCompany.toString();
+  
+  // ヤマト運輸
+  if (company.includes('ヤマト')) {
+    console.log(`🚚 配送会社変換: "${company}" → "ヤマト運輸"`);
+    return 'ヤマト運輸';
+  }
+  
+  // 佐川急便
+  if (company.includes('佐川')) {
+    console.log(`🚚 配送会社変換: "${company}" → "佐川急便"`);
+    return '佐川急便';
+  }
+  
+  // 日本郵便（OR検索）
+  if (company.includes('パック') || company.includes('レター') || company.includes('郵便')) {
+    console.log(`🚚 配送会社変換: "${company}" → "日本郵便"`);
+    return '日本郵便';
+  }
+  
+  // 変換対象外の場合は元の値を返す
+  console.log(`ℹ️ 配送会社変換対象外: "${company}" (そのまま)`);
+  return company;
+}
+
+/**
+ * 税率種別を変換
+ * @param {string} taxType - 元の税率種別
+ * @returns {string} 変換後の税率種別
+ */
+function convertTaxType(taxType) {
+  if (!taxType) return '';
+  
+  const tax = taxType.toString();
+  
+  // 標準税率
+  if (tax.includes('標準') || tax.includes('10%') || tax.includes('10％')) {
+    console.log(`💰 税率種別変換: "${tax}" → "標準税率"`);
+    return '標準税率';
+  }
+  
+  // 軽減税率
+  if (tax.includes('軽減') || tax.includes('8%') || tax.includes('8％')) {
+    console.log(`💰 税率種別変換: "${tax}" → "軽減税率"`);
+    return '軽減税率';
+  }
+  
+  // 非課税
+  if (tax.includes('非課税') || tax.includes('0%') || tax.includes('0％') || tax.includes('免税')) {
+    console.log(`💰 税率種別変換: "${tax}" → "非課税"`);
+    return '非課税';
+  }
+  
+  // 変換対象外の場合は元の値を返す
+  console.log(`ℹ️ 税率種別変換対象外: "${tax}" (そのまま)`);
+  return tax;
+}
+
+/**
  * Do書き出し用タブにデータを出力
  * @param {Object} cleanedData - クレンジングされたデータ
  * @param {Object} productTypes - 商品種別マップ
@@ -643,12 +895,15 @@ function outputToDoTabs(cleanedData, productTypes) {
     let singleCount = 0;
     let subscriptionCount = 0;
     
-    // 定期便の特別処理を先に実行
-    const processedData = processSubscriptionProducts(cleanedData);
+    // 期間処理（受付期間・発送期間）を先に実行
+    const periodProcessedData = processPeriodData(cleanedData);
+    
+    // 定期便の特別処理を実行
+    const processedData = processSubscriptionProducts(periodProcessedData);
     
     // 単一商品の出力
-    Object.keys(cleanedData).forEach(col => {
-      const data = cleanedData[col];
+    Object.keys(periodProcessedData).forEach(col => {
+      const data = periodProcessedData[col];
       if (data.type === 'single') {
         const result = outputToSingleTab(singleTab, data.data);
         if (result) singleCount++;
@@ -700,6 +955,17 @@ function outputToSingleTab(tab, data) {
     outputData['出荷可能日フラグ(土)'] = '有';
     outputData['出荷可能日フラグ(日)'] = '有';
     outputData['出荷可能日フラグ(祝日)'] = '有';
+    outputData['出品ステータス'] = '出品中';
+    
+    // 配送会社変換処理
+    if (outputData['配送会社']) {
+      outputData['配送会社'] = convertShippingCompany(outputData['配送会社']);
+    }
+    
+    // 税率種別変換処理
+    if (outputData['税率種別']) {
+      outputData['税率種別'] = convertTaxType(outputData['税率種別']);
+    }
     
     // 外部シート参照設定
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -757,6 +1023,17 @@ function outputToSubscriptionTab(tab, data) {
     outputData['出荷可能日フラグ(土)'] = '有';
     outputData['出荷可能日フラグ(日)'] = '有';
     outputData['出荷可能日フラグ(祝日)'] = '有';
+    outputData['出品ステータス'] = '出品中';
+    
+    // 配送会社変換処理
+    if (outputData['配送会社']) {
+      outputData['配送会社'] = convertShippingCompany(outputData['配送会社']);
+    }
+    
+    // 税率種別変換処理
+    if (outputData['税率種別']) {
+      outputData['税率種別'] = convertTaxType(outputData['税率種別']);
+    }
     
     // 外部シート参照設定
     const ss = SpreadsheetApp.getActiveSpreadsheet();
