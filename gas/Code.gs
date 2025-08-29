@@ -196,4 +196,76 @@ function executePhase4() {
   }
 }
 
+/**
+ * Phase 5: データクリア（独立実行用）
+ * Phase 1-4とは独立して実行可能
+ * 
+ * 処理内容:
+ * 1. 情報抽出タブの内容をクリア
+ * 2. Do書き出し用タブの内容をクリア
+ * 3. Do書き出し用(定期)タブの内容をクリア
+ */
+function executePhase5Standalone() {
+  try {
+    console.log('=== Phase 5: データクリア処理開始 ===');
+    const startTime = new Date();
+    
+    // Phase 5の実行
+    const phase5Result = executePhase5();
+    
+    if (phase5Result) {
+      const endTime = new Date();
+      const processingTime = endTime - startTime;
+      console.log(`✅ Phase 5完了: ${processingTime}ms`);
+      console.log('=== データクリア処理完了 ===');
+    } else {
+      console.log('❌ Phase 5でエラーが発生しました');
+    }
+    
+    return phase5Result;
+    
+  } catch (error) {
+    console.log(`❌ Phase 5実行エラー: ${error.message}`);
+    throw error;
+  }
+}
+
+/**
+ * Phase 5: データクリア（内部実行用）
+ * @returns {boolean} 処理結果
+ */
+function executePhase5() {
+  try {
+    // 1. 情報抽出タブのクリア
+    const infoExtractionResult = clearInfoExtractionTab();
+    if (infoExtractionResult) {
+      console.log('✅ 情報抽出タブのクリア完了');
+    } else {
+      console.log('❌ 情報抽出タブのクリアでエラーが発生しました');
+    }
+    
+    // 2. Do書き出し用タブのクリア
+    const doOutputResult = clearDoOutputTab();
+    if (doOutputResult) {
+      console.log('✅ Do書き出し用タブのクリア完了');
+    } else {
+      console.log('❌ Do書き出し用タブのクリアでエラーが発生しました');
+    }
+    
+    // 3. Do書き出し用(定期)タブのクリア
+    const doOutputSubscriptionResult = clearDoOutputSubscriptionTab();
+    if (doOutputSubscriptionResult) {
+      console.log('✅ Do書き出し用(定期)タブのクリア完了');
+    } else {
+      console.log('❌ Do書き出し用(定期)タブのクリアでエラーが発生しました');
+    }
+    
+    return infoExtractionResult && doOutputResult && doOutputSubscriptionResult;
+    
+  } catch (error) {
+    console.error('❌ Phase 5 エラー:', error);
+    return false;
+  }
+}
+
 
