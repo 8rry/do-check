@@ -127,17 +127,28 @@ function extractDataForDo(checkedColumns, productTypes) {
   try {
     const infoSheet = getInfoExtractionSheet();
     
+    // 実際のデータ範囲を取得（最適化）
+    const lastDataRow = infoSheet.getLastRow();
+    const actualEndRow = Math.min(lastDataRow, 200);
+    const rowCount = actualEndRow - 7; // 8行目から開始
+    
+    console.log(`🔍 データ抽出最適化: 8行目から${actualEndRow}行目まで (${rowCount}行)`);
+    
+    // 一括でデータを取得（高速化）
+    const dataRange = infoSheet.getRange(8, 1, rowCount, Math.max(...checkedColumns));
+    const allData = dataRange.getValues();
+    
     const extractedData = {};
     
     checkedColumns.forEach(col => {
       const productType = productTypes[col];
       const columnData = {};
       
-      // A8:A200の項目名をキーとしてデータを抽出
-      for (let row = 8; row <= 200; row++) {
-        const itemName = infoSheet.getRange(row, 1).getValue(); // A列の項目名
-        if (itemName) {
-          const dataValue = infoSheet.getRange(row, col).getValue();
+      // 一括取得したデータから抽出
+      for (let i = 0; i < allData.length; i++) {
+        const itemName = allData[i][0]; // A列の項目名
+        if (itemName && itemName.toString().trim() !== '') {
+          const dataValue = allData[i][col - 1]; // 列インデックスは0ベース
           columnData[itemName] = dataValue;
         }
       }
@@ -148,7 +159,7 @@ function extractDataForDo(checkedColumns, productTypes) {
       };
     });
     
-    console.log(`📊 データ抽出完了: ${Object.keys(extractedData).length}列分のデータを抽出`);
+    console.log(`📊 データ抽出完了: ${Object.keys(extractedData).length}列分のデータを抽出 (最適化版)`);
     return extractedData;
     
   } catch (error) {
@@ -828,6 +839,12 @@ function convertShippingCompany(shippingCompany) {
   
   const company = shippingCompany.toString();
   
+  // デフォルト値の場合は空文字を設定
+  if (company.includes('配送方法をお選びください') || company.includes('選択してください')) {
+    console.log(`🚚 配送会社変換: "${company}" → "" (デフォルト値)`);
+    return '';
+  }
+  
   // ヤマト運輸
   if (company.includes('ヤマト')) {
     console.log(`🚚 配送会社変換: "${company}" → "ヤマト運輸"`);
@@ -879,9 +896,9 @@ function convertTaxType(taxType) {
     return '非課税';
   }
   
-  // 変換対象外の場合は元の値を返す
-  console.log(`ℹ️ 税率種別変換対象外: "${tax}" (そのまま)`);
-  return tax;
+  // 上記以外の場合は空文字を設定
+  console.log(`💰 税率種別変換: "${tax}" → "" (未対応の値)`);
+  return '';
 }
 
 /**
@@ -951,6 +968,8 @@ function outputToSingleTab(tab, data) {
     // データの最終行に追加（上書き防止）
     const lastRow = tab.getLastRow();
     const targetRow = lastRow + 1;
+    // 列インデックスキャッシュ（ヘッダー→列番号）を作成
+    const columnIndexCache = createColumnIndexCache(tab);
     
     // 出力用のデータを作成（固定値と外部シート参照を含む）
     const outputData = { ...data };
@@ -984,7 +1003,7 @@ function outputToSingleTab(tab, data) {
     const infoSheet = ss.getSheetByName('情報抽出');
     if (infoSheet) {
       const keyValue = infoSheet.getRange('B1').getValue();
-      const externalValue = getExternalPriceValue(keyValue);
+      const externalValue = getExternalPriceValueOptimized(keyValue);
       if (externalValue) {
         outputData['寄附金額(開始)1'] = externalValue;
         outputData['提供価格(開始)1'] = externalValue;
@@ -992,11 +1011,13 @@ function outputToSingleTab(tab, data) {
       }
     }
     
-    // 項目名をキーとして適切な列にデータを配置
-    Object.keys(outputData).forEach(itemName => {
-      const columnIndex = findColumnIndexByItemName(tab, itemName);
+    // 変換を一括適用
+    const convertedData = applyDataConversionsOptimized(outputData);
+    // 項目名をキーとして適切な列にデータを配置（キャッシュ利用）
+    Object.keys(convertedData).forEach(itemName => {
+      const columnIndex = columnIndexCache[itemName] || 0;
       if (columnIndex > 0) {
-        tab.getRange(targetRow, columnIndex).setValue(outputData[itemName]);
+        tab.getRange(targetRow, columnIndex).setValue(convertedData[itemName]);
       }
     });
     
@@ -1019,6 +1040,8 @@ function outputToSubscriptionTab(tab, data) {
     // データの最終行に追加（上書き防止）
     const lastRow = tab.getLastRow();
     const targetRow = lastRow + 1;
+    // 列インデックスキャッシュ（ヘッダー→列番号）を作成
+    const columnIndexCache = createColumnIndexCache(tab);
     
     // 出力用のデータを作成（固定値と外部シート参照を含む）
     const outputData = { ...data };
@@ -1052,7 +1075,7 @@ function outputToSubscriptionTab(tab, data) {
     const infoSheet = ss.getSheetByName('情報抽出');
     if (infoSheet) {
       const keyValue = infoSheet.getRange('B1').getValue();
-      const externalValue = getExternalPriceValue(keyValue);
+      const externalValue = getExternalPriceValueOptimized(keyValue);
       if (externalValue) {
         outputData['寄附金額(開始)1'] = externalValue;
         outputData['提供価格(開始)1'] = externalValue;
@@ -1060,13 +1083,23 @@ function outputToSubscriptionTab(tab, data) {
       }
     }
     
-    // 項目名をキーとして適切な列にデータを配置
-    Object.keys(outputData).forEach(itemName => {
-      const columnIndex = findColumnIndexByItemName(tab, itemName);
+    // 変換を一括適用
+    const convertedData = applyDataConversionsOptimized(outputData);
+    
+    // バッチ処理による一括出力（高速化）
+    const lastColumn = tab.getLastColumn();
+    const outputValues = new Array(lastColumn).fill('');
+    
+    Object.keys(convertedData).forEach(itemName => {
+      const columnIndex = columnIndexCache[itemName] || 0;
       if (columnIndex > 0) {
-        tab.getRange(targetRow, columnIndex).setValue(outputData[itemName]);
+        outputValues[columnIndex - 1] = convertedData[itemName];
       }
     });
+    
+    // 一括で値を設定
+    const outputRange = tab.getRange(targetRow, 1, 1, lastColumn);
+    outputRange.setValues([outputValues]);
     
     return true;
     
@@ -1099,5 +1132,364 @@ function findColumnIndexByItemName(tab, itemName) {
   } catch (error) {
     console.error('❌ 項目名から列インデックス検索エラー:', error);
     return 0;
+  }
+}
+
+/**
+ * 高速化機能: 列インデックスキャッシュ
+ * 項目名から列インデックスへの検索を高速化
+ * @param {Sheet} tab - 対象タブ
+ * @returns {Object} 列インデックスキャッシュ
+ */
+function createColumnIndexCache(tab) {
+  try {
+    const columnIndexCache = {};
+    const headerRow = tab.getRange(1, 1, 1, tab.getLastColumn()).getValues()[0];
+    
+    headerRow.forEach((header, index) => {
+      if (header) {
+        columnIndexCache[header] = index + 1;
+      }
+    });
+    
+    console.log(`📋 列インデックスキャッシュ作成完了: ${Object.keys(columnIndexCache).length}項目`);
+    return columnIndexCache;
+    
+  } catch (error) {
+    console.error('❌ 列インデックスキャッシュ作成エラー:', error);
+    return {};
+  }
+}
+
+/**
+ * 高速化機能: 外部シート参照キャッシュ
+ * 同じキー値に対する外部シートアクセスをキャッシュ
+ */
+let globalExternalValueCache = {};
+
+/**
+ * 高速化機能: 外部シート参照最適化版
+ * @param {string} keyValue - 情報抽出タブB1の値
+ * @returns {string} 寄附金額(開始)1の値
+ */
+function getExternalPriceValueOptimized(keyValue) {
+  try {
+    if (!keyValue) return '';
+    
+    // キャッシュに存在しない場合のみ外部シートにアクセス
+    if (!globalExternalValueCache[keyValue]) {
+      console.log(`🔍 外部シートアクセス: "${keyValue}"`);
+      
+      const externalSheetId = '1aRAvMW8-VEVmZQbAHiIas53Jcq6QVR8E0bE6tgTiL3s';
+      const sheetName = '商品マスタ登録依頼表(CS) 2025/05/01';
+      
+      const externalSheet = SpreadsheetApp.openById(externalSheetId);
+      const targetSheet = externalSheet.getSheetByName(sheetName);
+      
+      if (targetSheet) {
+        const searchValue = keyValue;
+        const data = targetSheet.getDataRange().getValues();
+        
+        for (let i = 0; i < data.length; i++) {
+          if (data[i][7] && data[i][7].toString().includes(searchValue)) {
+            globalExternalValueCache[keyValue] = data[i][3] || '';
+            console.log(`✅ 外部シート値取得: "${keyValue}" → "${globalExternalValueCache[keyValue]}"`);
+            break;
+          }
+        }
+      }
+      
+      // 見つからない場合は空文字をキャッシュ
+      if (!globalExternalValueCache[keyValue]) {
+        globalExternalValueCache[keyValue] = '';
+        console.log(`⚠️ 外部シート値未発見: "${keyValue}"`);
+      }
+    } else {
+      console.log(`📋 外部シートキャッシュ使用: "${keyValue}" → "${globalExternalValueCache[keyValue]}"`);
+    }
+    
+    return globalExternalValueCache[keyValue];
+    
+  } catch (error) {
+    console.error('❌ 外部シート参照最適化エラー:', error);
+    return '';
+  }
+}
+
+/**
+ * 高速化機能: データ変換処理最適化
+ * 変換ルールを事前定義して一括処理
+ * @param {Object} outputData - 出力データ
+ * @returns {Object} 変換後のデータ
+ */
+function applyDataConversionsOptimized(outputData) {
+  try {
+    // 変換ルールを事前定義
+    const conversionRules = {
+      '配送会社': convertShippingCompany,
+      '税率種別': convertTaxType
+    };
+    
+    // 一括変換処理
+    Object.keys(conversionRules).forEach(field => {
+      if (outputData[field]) {
+        const originalValue = outputData[field];
+        outputData[field] = conversionRules[field](outputData[field]);
+        console.log(`🔄 データ変換: "${field}" "${originalValue}" → "${outputData[field]}"`);
+      }
+    });
+    
+    return outputData;
+    
+  } catch (error) {
+    console.error('❌ データ変換処理最適化エラー:', error);
+    return outputData;
+  }
+}
+
+/**
+ * 高速化機能: 単一商品用タブへの出力（最適化版）
+ * @param {Sheet} tab - 出力先タブ
+ * @param {Object} data - 出力データ
+ * @returns {boolean} 出力結果
+ */
+function outputToSingleTabOptimized(tab, data) {
+  try {
+    const startTime = new Date().getTime();
+    
+    // 1. 列インデックスキャッシュを作成
+    const columnIndexCache = createColumnIndexCache(tab);
+    
+    // 2. データの最終行に追加
+    const lastRow = tab.getLastRow();
+    const targetRow = lastRow + 1;
+    
+    // 3. 出力用のデータを作成
+    const outputData = { ...data };
+    
+    // 4. 固定値設定
+    outputData['寄附金額(終了)1'] = '2099/12/31';
+    outputData['在庫数'] = '99999';
+    outputData['アラート在庫数'] = '1';
+    outputData['出荷可能日フラグ(月)'] = '有';
+    outputData['出荷可能日フラグ(火)'] = '有';
+    outputData['出荷可能日フラグ(水)'] = '有';
+    outputData['出荷可能日フラグ(木)'] = '有';
+    outputData['出荷可能日フラグ(金)'] = '有';
+    outputData['出荷可能日フラグ(土)'] = '有';
+    outputData['出荷可能日フラグ(日)'] = '有';
+    outputData['出荷可能日フラグ(祝日)'] = '有';
+    outputData['出品ステータス'] = '出品中';
+    
+    // 5. 外部シート参照（キャッシュ使用）
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const infoSheet = ss.getSheetByName('情報抽出');
+    if (infoSheet) {
+      const keyValue = infoSheet.getRange('B1').getValue();
+      const externalValue = getExternalPriceValueOptimized(keyValue);
+      if (externalValue) {
+        outputData['寄附金額(開始)1'] = externalValue;
+        outputData['提供価格(開始)1'] = externalValue;
+        console.log(`✅ 単品: 寄附金額(開始)1と提供価格(開始)1を外部シートの値に設定: "${externalValue}"`);
+      }
+    }
+    
+    // 6. データ変換処理（一括処理）
+    const convertedData = applyDataConversionsOptimized(outputData);
+    
+    // 7. キャッシュを使用して高速アクセス
+    Object.keys(convertedData).forEach(itemName => {
+      const columnIndex = columnIndexCache[itemName] || 0;
+      if (columnIndex > 0) {
+        tab.getRange(targetRow, columnIndex).setValue(convertedData[itemName]);
+      }
+    });
+    
+    const endTime = new Date().getTime();
+    const executionTime = endTime - startTime;
+    console.log(`⚡ 単一商品出力最適化版完了: ${executionTime}ms`);
+    
+    return true;
+    
+  } catch (error) {
+    console.error('❌ 単一商品用タブへの出力最適化エラー:', error);
+    return false;
+  }
+}
+
+/**
+ * 高速化機能: 定期便用タブへの出力（最適化版）
+ * @param {Sheet} tab - 出力先タブ
+ * @param {Object} data - 出力データ
+ * @returns {boolean} 出力結果
+ */
+function outputToSubscriptionTabOptimized(tab, data) {
+  try {
+    const startTime = new Date().getTime();
+    
+    // 1. 列インデックスキャッシュを作成
+    const columnIndexCache = createColumnIndexCache(tab);
+    
+    // 2. データの最終行に追加
+    const lastRow = tab.getLastRow();
+    const targetRow = lastRow + 1;
+    
+    // 3. 出力用のデータを作成
+    const outputData = { ...data };
+    
+    // 4. 固定値設定
+    outputData['寄附金額(終了)1'] = '2099/12/31';
+    outputData['在庫数'] = '99999';
+    outputData['アラート在庫数'] = '1';
+    outputData['出荷可能日フラグ(月)'] = '有';
+    outputData['出荷可能日フラグ(火)'] = '有';
+    outputData['出荷可能日フラグ(水)'] = '有';
+    outputData['出荷可能日フラグ(木)'] = '有';
+    outputData['出荷可能日フラグ(金)'] = '有';
+    outputData['出荷可能日フラグ(土)'] = '有';
+    outputData['出荷可能日フラグ(日)'] = '有';
+    outputData['出荷可能日フラグ(祝日)'] = '有';
+    outputData['出品ステータス'] = '出品中';
+    
+    // 5. 外部シート参照（キャッシュ使用）
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const infoSheet = ss.getSheetByName('情報抽出');
+    if (infoSheet) {
+      const keyValue = infoSheet.getRange('B1').getValue();
+      const externalValue = getExternalPriceValueOptimized(keyValue);
+      if (externalValue) {
+        outputData['寄附金額(開始)1'] = externalValue;
+        outputData['提供価格(開始)1'] = externalValue;
+        console.log(`✅ 定期便: 寄附金額(開始)1と提供価格(開始)1を外部シートの値に設定: "${externalValue}"`);
+      }
+    }
+    
+    // 6. データ変換処理（一括処理）
+    const convertedData = applyDataConversionsOptimized(outputData);
+    
+    // 7. キャッシュを使用して高速アクセス
+    Object.keys(convertedData).forEach(itemName => {
+      const columnIndex = columnIndexCache[itemName] || 0;
+      if (columnIndex > 0) {
+        tab.getRange(targetRow, columnIndex).setValue(convertedData[itemName]);
+      }
+    });
+    
+    const endTime = new Date().getTime();
+    const executionTime = endTime - startTime;
+    console.log(`⚡ 定期便出力最適化版完了: ${executionTime}ms`);
+    
+    return true;
+    
+  } catch (error) {
+    console.error('❌ 定期便用タブへの出力最適化エラー:', error);
+    return false;
+  }
+}
+
+/**
+ * 高速化機能: Do書き出し用タブへの出力（最適化版）
+ * @param {Object} cleanedData - クレンジングされたデータ
+ * @param {Object} productTypes - 商品種別マップ
+ * @returns {boolean} 出力結果
+ */
+function outputToDoTabsOptimized(cleanedData, productTypes) {
+  try {
+    const startTime = new Date().getTime();
+    
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const singleTab = ss.getSheetByName('Do書き出し用');
+    const subscriptionTab = ss.getSheetByName('Do書き出し用(定期)');
+    
+    if (!singleTab) {
+      throw new Error('Do書き出し用タブが見つかりません');
+    }
+    
+    if (!subscriptionTab) {
+      throw new Error('Do書き出し用(定期)タブが見つかりません');
+    }
+    
+    let singleCount = 0;
+    let subscriptionCount = 0;
+    
+    // 期間処理（受付期間・発送期間）を先に実行
+    const periodProcessedData = processPeriodData(cleanedData);
+    
+    // 定期便の特別処理を実行
+    const processedData = processSubscriptionProducts(periodProcessedData);
+    
+    // 単一商品の出力（最適化版）
+    Object.keys(periodProcessedData).forEach(col => {
+      const data = periodProcessedData[col];
+      if (data.type === 'single') {
+        const result = outputToSingleTabOptimized(singleTab, data.data);
+        if (result) singleCount++;
+      }
+    });
+    
+    // 定期便の出力（子マスタ・親マスタ）（最適化版）
+    Object.keys(processedData).forEach(key => {
+      const data = processedData[key];
+      if (data.type === 'subscription_child' || data.type === 'subscription_parent') {
+        const result = outputToSubscriptionTabOptimized(subscriptionTab, data.data);
+        if (result) subscriptionCount++;
+      }
+    });
+    
+    const endTime = new Date().getTime();
+    const executionTime = endTime - startTime;
+    console.log(`⚡ Do書き出し用タブへの出力最適化版完了: 単一商品${singleCount}件、定期便${subscriptionCount}件 (${executionTime}ms)`);
+    return true;
+    
+  } catch (error) {
+    console.error('❌ Do書き出し用タブへの出力最適化エラー:', error);
+    return false;
+  }
+}
+
+/**
+ * 高速化機能: 外部シート参照キャッシュのクリア
+ * 必要に応じてキャッシュをリセット
+ */
+function clearExternalValueCache() {
+  globalExternalValueCache = {};
+  console.log('🗑️ 外部シート参照キャッシュをクリアしました');
+}
+
+/**
+ * 高速化機能: 性能測定
+ * 既存版と最適化版の性能を比較
+ * @param {Object} cleanedData - クレンジングされたデータ
+ * @param {Object} productTypes - 商品種別マップ
+ */
+function measurePerformance(cleanedData, productTypes) {
+  try {
+    console.log('📊 性能測定開始...');
+    
+    // 既存版の性能測定
+    const startTime1 = new Date().getTime();
+    const result1 = outputToDoTabs(cleanedData, productTypes);
+    const endTime1 = new Date().getTime();
+    const executionTime1 = endTime1 - startTime1;
+    
+    // キャッシュをクリア
+    clearExternalValueCache();
+    
+    // 最適化版の性能測定
+    const startTime2 = new Date().getTime();
+    const result2 = outputToDoTabsOptimized(cleanedData, productTypes);
+    const endTime2 = new Date().getTime();
+    const executionTime2 = endTime2 - startTime2;
+    
+    // 結果表示
+    console.log('📊 性能測定結果:');
+    console.log(`  - 既存版: ${executionTime1}ms`);
+    console.log(`  - 最適化版: ${executionTime2}ms`);
+    console.log(`  - 高速化率: ${((executionTime1 - executionTime2) / executionTime1 * 100).toFixed(1)}%`);
+    console.log(`  - 既存版結果: ${result1 ? '成功' : '失敗'}`);
+    console.log(`  - 最適化版結果: ${result2 ? '成功' : '失敗'}`);
+    
+  } catch (error) {
+    console.error('❌ 性能測定エラー:', error);
   }
 }

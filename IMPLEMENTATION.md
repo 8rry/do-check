@@ -338,6 +338,168 @@ function executePhase4() {
     return false;
   }
 }
+
+### 5.4 高速化実装
+
+#### **5.4.1 Phase 1: 列インデックスキャッシュ**
+```javascript
+function outputToSingleTabOptimized(tab, data) {
+  try {
+    // 列インデックスキャッシュを作成
+    const columnIndexCache = {};
+    const headerRow = tab.getRange(1, 1, 1, tab.getLastColumn()).getValues()[0];
+    headerRow.forEach((header, index) => {
+      columnIndexCache[header] = index + 1;
+    });
+    
+    // データの最終行に追加
+    const lastRow = tab.getLastRow();
+    const targetRow = lastRow + 1;
+    
+    // 出力用のデータを作成
+    const outputData = { ...data };
+    
+    // 固定値設定（既存処理）
+    outputData['寄附金額(終了)1'] = '2099/12/31';
+    // ... 他の固定値設定
+    
+    // キャッシュを使用して高速アクセス
+    Object.keys(outputData).forEach(itemName => {
+      const columnIndex = columnIndexCache[itemName] || 0;
+      if (columnIndex > 0) {
+        tab.getRange(targetRow, columnIndex).setValue(outputData[itemName]);
+      }
+    });
+    
+    return true;
+  } catch (error) {
+    console.error('❌ 単一商品用タブへの出力エラー:', error);
+    return false;
+  }
+}
+```
+
+#### **5.4.2 Phase 2: 外部シート参照最適化**
+```javascript
+function getExternalPriceValueOptimized(keyValue) {
+  // グローバルキャッシュ（関数外で定義）
+  if (!globalExternalValueCache) {
+    globalExternalValueCache = {};
+  }
+  
+  // キャッシュに存在しない場合のみ外部シートにアクセス
+  if (!globalExternalValueCache[keyValue]) {
+    const externalSheetId = '1aRAvMW8-VEVmZQbAHiIas53Jcq6QVR8E0bE6tgTiL3s';
+    const sheetName = '商品マスタ登録依頼表(CS) 2025/05/01';
+    
+    const externalSheet = SpreadsheetApp.openById(externalSheetId);
+    const targetSheet = externalSheet.getSheetByName(sheetName);
+    
+    if (targetSheet) {
+      // 既存の検索ロジック
+      const searchValue = keyValue;
+      const data = targetSheet.getDataRange().getValues();
+      
+      for (let i = 0; i < data.length; i++) {
+        if (data[i][7] && data[i][7].toString().includes(searchValue)) {
+          globalExternalValueCache[keyValue] = data[i][3] || '';
+          break;
+        }
+      }
+    }
+  }
+  
+  return globalExternalValueCache[keyValue] || '';
+}
+```
+
+#### **5.4.3 Phase 3: データ変換処理最適化**
+```javascript
+function applyDataConversionsOptimized(outputData) {
+  // 変換ルールを事前定義
+  const conversionRules = {
+    '配送会社': convertShippingCompany,
+    '税率種別': convertTaxType
+  };
+  
+  // 一括変換処理
+  Object.keys(conversionRules).forEach(field => {
+    if (outputData[field]) {
+      outputData[field] = conversionRules[field](outputData[field]);
+    }
+  });
+  
+  return outputData;
+}
+```
+
+#### **5.4.4 統合高速化実装**
+```javascript
+function outputToSingleTabFullyOptimized(tab, data) {
+  try {
+    // 1. 列インデックスキャッシュ
+    const columnIndexCache = {};
+    const headerRow = tab.getRange(1, 1, 1, tab.getLastColumn()).getValues()[0];
+    headerRow.forEach((header, index) => {
+      columnIndexCache[header] = index + 1;
+    });
+    
+    // 2. データの最終行に追加
+    const lastRow = tab.getLastRow();
+    const targetRow = lastRow + 1;
+    
+    // 3. 出力用のデータを作成
+    const outputData = { ...data };
+    
+    // 4. 固定値設定
+    outputData['寄附金額(終了)1'] = '2099/12/31';
+    // ... 他の固定値設定
+    
+    // 5. 外部シート参照（キャッシュ使用）
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const infoSheet = ss.getSheetByName('情報抽出');
+    if (infoSheet) {
+      const keyValue = infoSheet.getRange('B1').getValue();
+      const externalValue = getExternalPriceValueOptimized(keyValue);
+      if (externalValue) {
+        outputData['寄附金額(開始)1'] = externalValue;
+        outputData['提供価格(開始)1'] = externalValue;
+      }
+    }
+    
+    // 6. データ変換処理（一括処理）
+    const convertedData = applyDataConversionsOptimized(outputData);
+    
+    // 7. キャッシュを使用して高速アクセス
+    Object.keys(convertedData).forEach(itemName => {
+      const columnIndex = columnIndexCache[itemName] || 0;
+      if (columnIndex > 0) {
+        tab.getRange(targetRow, columnIndex).setValue(convertedData[itemName]);
+      }
+    });
+    
+    return true;
+  } catch (error) {
+    console.error('❌ 単一商品用タブへの出力エラー:', error);
+    return false;
+  }
+}
+```
+
+#### **5.4.5 性能測定**
+```javascript
+function measurePerformance() {
+  const startTime = new Date().getTime();
+  
+  // 既存の処理
+  outputToSingleTab(tab, data);
+  
+  const endTime = new Date().getTime();
+  const executionTime = endTime - startTime;
+  
+  console.log(`⏱️ 実行時間: ${executionTime}ms`);
+}
+```
 ```
 
 #### **5.3.2 チェックボックス確認処理**
