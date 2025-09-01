@@ -81,6 +81,9 @@ function processExcelFileForPhase1(fileId, fileName) {
     tempFileId = convertedFile.id;
     console.log(`✅ Drive API変換完了: ${tempFileId}`);
     
+    // 一時ファイルを登録
+    registerTempFile(tempFileId);
+    
     // 変換されたスプレッドシートを開く
     const ss = SpreadsheetApp.openById(tempFileId);
     const sheet = ss.getActiveSheet();
@@ -468,6 +471,22 @@ function outputProductDataToInfoExtractionTabOptimized(extractedData) {
       outputRows: 0,
       error: error.message
     };
+  }
+}
+
+/**
+ * 一時ファイルの登録解除処理
+ * @param {string} tempFileId - 一時ファイルID
+ */
+function cleanupPhase1TempFile(tempFileId) {
+  try {
+    if (tempFileId) {
+      // 一時ファイルを登録解除
+      unregisterTempFile(tempFileId);
+      console.log(`📝 Phase1一時ファイル登録解除完了: ${tempFileId}`);
+    }
+  } catch (error) {
+    console.log(`⚠️ Phase1一時ファイル登録解除エラー: ${error.message}`);
   }
 }
 

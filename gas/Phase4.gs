@@ -8,7 +8,68 @@
  * - 単一商品・定期便の自動判別
  * - データクレンジング処理
  * - Do書き出し用タブへの出力
+ * - 一時ファイルの自動クリーンアップ
  */
+
+// 一時ファイル管理用グローバル変数
+let tempFileIds = [];
+
+/**
+ * 一時ファイルIDを登録
+ * @param {string} tempFileId - 一時ファイルID
+ */
+function registerTempFile(tempFileId) {
+  if (tempFileId && !tempFileIds.includes(tempFileId)) {
+    tempFileIds.push(tempFileId);
+    console.log(`📝 一時ファイル登録: ${tempFileId}`);
+  }
+}
+
+/**
+ * 一時ファイルをクリーンアップ
+ * @param {boolean} forceCleanup - 強制クリーンアップフラグ
+ */
+function cleanupPhase4TempFiles(forceCleanup = false) {
+  try {
+    if (tempFileIds.length === 0) {
+      console.log('ℹ️ クリーンアップ対象の一時ファイルがありません');
+      return;
+    }
+    
+    console.log(`🗑️ Phase4一時ファイルクリーンアップ開始: ${tempFileIds.length}件`);
+    
+    let deletedCount = 0;
+    let errorCount = 0;
+    
+    tempFileIds.forEach(tempFileId => {
+      try {
+        const tempFile = DriveApp.getFileById(tempFileId);
+        if (tempFile) {
+          tempFile.setTrashed(true);
+          deletedCount++;
+          console.log(`✅ 一時ファイル削除完了: ${tempFileId}`);
+        } else {
+          console.log(`⚠️ 一時ファイルが見つかりません: ${tempFileId}`);
+        }
+      } catch (error) {
+        errorCount++;
+        console.error(`❌ 一時ファイル削除エラー: ${tempFileId} - ${error.message}`);
+      }
+    });
+    
+    // クリーンアップ完了後は配列をクリア
+    tempFileIds = [];
+    
+    if (errorCount === 0) {
+      console.log(`🗑️ Phase4一時ファイルクリーンアップ完了: ${deletedCount}件削除`);
+    } else {
+      console.log(`⚠️ Phase4一時ファイルクリーンアップ完了（一部エラー）: ${deletedCount}件削除、${errorCount}件エラー`);
+    }
+    
+  } catch (error) {
+    console.error('❌ Phase4一時ファイルクリーンアップ処理エラー:', error);
+  }
+}
 
 /**
  * 情報抽出タブを検索・取得

@@ -1010,6 +1010,249 @@ function findBestDoMapping(searchText) {
 
 
 /**
+ * 包括的な一時ファイル管理システム
+ */
+
+// グローバル変数で一時ファイルIDを追跡
+let globalTempFileIds = [];
+let globalTempFileCleanupTime = null;
+
+/**
+ * 一時ファイルIDを登録
+ * @param {string} tempFileId - 一時ファイルID
+ */
+function registerTempFile(tempFileId) {
+  if (tempFileId && !globalTempFileIds.includes(tempFileId)) {
+    globalTempFileIds.push(tempFileId);
+    console.log(`📝 一時ファイル登録: ${tempFileId} (現在${globalTempFileIds.length}件)`);
+  }
+}
+
+/**
+ * 一時ファイルIDを登録解除
+ * @param {string} tempFileId - 一時ファイルID
+ */
+function unregisterTempFile(tempFileId) {
+  const index = globalTempFileIds.indexOf(tempFileId);
+  if (index > -1) {
+    globalTempFileIds.splice(index, 1);
+    console.log(`📝 一時ファイル登録解除: ${tempFileId} (残り${globalTempFileIds.length}件)`);
+  }
+}
+
+/**
+ * 包括的な一時ファイルクリーンアップ
+ * @param {boolean} forceCleanup - 強制クリーンアップ（エラー時など）
+ * @returns {Object} クリーンアップ結果
+ */
+function comprehensiveTempFileCleanup(forceCleanup = false) {
+  try {
+    console.log('🗑️ 包括的一時ファイルクリーンアップ開始');
+    
+    let deletedFiles = 0;
+    const errors = [];
+    const now = new Date();
+    
+    // 1. 登録済み一時ファイルのクリーンアップ
+    if (globalTempFileIds.length > 0) {
+      console.log(`🔍 登録済み一時ファイル${globalTempFileIds.length}件をクリーンアップ中...`);
+      
+      globalTempFileIds.forEach(tempFileId => {
+        try {
+          const tempFile = DriveApp.getFileById(tempFileId);
+          if (tempFile) {
+            tempFile.setTrashed(true);
+            console.log(`✅ 登録済み一時ファイル削除: ${tempFileId}`);
+            deletedFiles++;
+          } else {
+            console.log(`⚠️ 登録済み一時ファイルが見つかりません: ${tempFileId}`);
+          }
+        } catch (error) {
+          const errorMsg = `登録済み一時ファイル削除エラー: ${tempFileId} - ${error.message}`;
+          console.log(`❌ ${errorMsg}`);
+          errors.push(errorMsg);
+        }
+      });
+      
+      // 登録リストをクリア
+      globalTempFileIds = [];
+    }
+    
+    // 2. パターンマッチによる一時ファイル検索・削除
+    try {
+      const tempFiles = DriveApp.getFilesByName(`temp_*`);
+      let patternMatchedFiles = 0;
+      
+      while (tempFiles.hasNext()) {
+        const tempFile = tempFiles.next();
+        const fileName = tempFile.getName();
+        const fileDate = tempFile.getDateCreated();
+        const hoursDiff = (now - fileDate) / (1000 * 60 * 60);
+        
+        // 強制クリーンアップまたは古いファイル（12時間以上前）を削除
+        if (forceCleanup || hoursDiff > 12) {
+          try {
+            tempFile.setTrashed(true);
+            console.log(`✅ パターンマッチ一時ファイル削除: ${fileName} (${Math.round(hoursDiff)}時間前)`);
+            deletedFiles++;
+            patternMatchedFiles++;
+          } catch (deleteError) {
+            const errorMsg = `パターンマッチ一時ファイル削除エラー: ${fileName} - ${deleteError.message}`;
+            console.log(`❌ ${errorMsg}`);
+            errors.push(errorMsg);
+          }
+        }
+      }
+      
+      console.log(`🔍 パターンマッチ一時ファイル: ${patternMatchedFiles}件削除`);
+      
+    } catch (searchError) {
+      const errorMsg = `パターンマッチ一時ファイル検索エラー: ${searchError.message}`;
+      console.log(`⚠️ ${errorMsg}`);
+      errors.push(errorMsg);
+    }
+    
+    // 3. 古い一時ファイルの検索・削除（より広範囲）
+    try {
+      const allFiles = DriveApp.getFiles();
+      let oldTempFiles = 0;
+      
+      while (allFiles.hasNext()) {
+        const file = allFiles.next();
+        const fileName = file.getName();
+        
+        // temp_で始まるファイルまたは特定のパターン
+        if (fileName.startsWith('temp_') || 
+            fileName.includes('temp_') || 
+            fileName.includes('converted_') ||
+            fileName.includes('temp_')) {
+          
+          const fileDate = file.getDateCreated();
+          const hoursDiff = (now - fileDate) / (1000 * 60 * 60);
+          
+          // 強制クリーンアップまたは古いファイル（6時間以上前）を削除
+          if (forceCleanup || hoursDiff > 6) {
+            try {
+              file.setTrashed(true);
+              console.log(`✅ 古い一時ファイル削除: ${fileName} (${Math.round(hoursDiff)}時間前)`);
+              deletedFiles++;
+              oldTempFiles++;
+            } catch (deleteError) {
+              const errorMsg = `古い一時ファイル削除エラー: ${fileName} - ${deleteError.message}`;
+              console.log(`❌ ${errorMsg}`);
+              errors.push(errorMsg);
+            }
+          }
+        }
+      }
+      
+      console.log(`🔍 古い一時ファイル: ${oldTempFiles}件削除`);
+      
+    } catch (searchError) {
+      const errorMsg = `古い一時ファイル検索エラー: ${searchError.message}`;
+      console.log(`⚠️ ${errorMsg}`);
+      errors.push(errorMsg);
+    }
+    
+    // クリーンアップ時間を記録
+    globalTempFileCleanupTime = now;
+    
+    // 結果を返す
+    if (errors.length === 0) {
+      console.log(`🗑️ 包括的一時ファイルクリーンアップ完了: ${deletedFiles}件のファイルを削除`);
+      return {
+        success: true,
+        deletedFiles: deletedFiles,
+        message: `${deletedFiles}件の一時ファイルを削除しました`,
+        cleanupTime: now
+      };
+    } else {
+      console.log(`⚠️ 包括的一時ファイルクリーンアップ完了（一部エラー）: ${deletedFiles}件削除、${errors.length}件エラー`);
+      return {
+        success: true,
+        deletedFiles: deletedFiles,
+        errors: errors,
+        message: `${deletedFiles}件の一時ファイルを削除しました（${errors.length}件でエラー）`,
+        cleanupTime: now
+      };
+    }
+    
+  } catch (error) {
+    console.log(`❌ 包括的一時ファイルクリーンアップ処理エラー: ${error.message}`);
+    return {
+      success: false,
+      deletedFiles: 0,
+      error: error.message,
+      stack: error.stack
+    };
+  }
+}
+
+/**
+ * エラー時の自動クリーンアップ
+ * @param {Error} error - 発生したエラー
+ */
+function autoCleanupOnError(error) {
+  console.log('🚨 エラー発生時の自動クリーンアップ開始');
+  
+  try {
+    // 強制クリーンアップを実行
+    const cleanupResult = comprehensiveTempFileCleanup(true);
+    
+    if (cleanupResult.success) {
+      console.log(`✅ エラー時自動クリーンアップ完了: ${cleanupResult.deletedFiles}件削除`);
+    } else {
+      console.log(`❌ エラー時自動クリーンアップ失敗: ${cleanupResult.error}`);
+    }
+    
+    return cleanupResult;
+    
+  } catch (cleanupError) {
+    console.log(`❌ エラー時自動クリーンアップでエラー: ${cleanupError.message}`);
+    return {
+      success: false,
+      error: cleanupError.message
+    };
+  }
+}
+
+/**
+ * 定期クリーンアップ（手動実行用）
+ * @returns {Object} クリーンアップ結果
+ */
+function scheduledTempFileCleanup() {
+  console.log('⏰ 定期一時ファイルクリーンアップ開始');
+  
+  // 最後のクリーンアップから6時間経過しているかチェック
+  if (globalTempFileCleanupTime) {
+    const now = new Date();
+    const hoursSinceLastCleanup = (now - globalTempFileCleanupTime) / (1000 * 60 * 60);
+    
+    if (hoursSinceLastCleanup < 6) {
+      console.log(`⏰ 最後のクリーンアップから${Math.round(hoursSinceLastCleanup)}時間経過。6時間経過後に実行します。`);
+      return {
+        success: false,
+        message: '最後のクリーンアップから6時間経過していません'
+      };
+    }
+  }
+  
+  return comprehensiveTempFileCleanup(false);
+}
+
+/**
+ * 一時ファイル管理状況の表示
+ * @returns {Object} 管理状況
+ */
+function getTempFileManagementStatus() {
+  return {
+    registeredFiles: globalTempFileIds.length,
+    lastCleanup: globalTempFileCleanupTime,
+    status: globalTempFileIds.length > 0 ? 'active' : 'clean'
+  };
+}
+
+/**
  * 一時ファイルの削除処理
  * @param {string} tempSpreadsheetId - 一時スプレッドシートのID
  * @returns {Object} 削除結果

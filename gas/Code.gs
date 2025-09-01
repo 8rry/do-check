@@ -49,17 +49,17 @@ function main() {
       console.log(`✅ Phase 3完了: ${parallelResults.phase3.processedRows || 0}行処理`);
     }
     
-    // 一時ファイルの削除
-    console.log('🗑️ 一時ファイル削除開始');
+    // 包括的一時ファイルクリーンアップ
+    console.log('🗑️ 包括的一時ファイルクリーンアップ開始');
     try {
-      const cleanupResult = cleanupTempFiles(phase1Result.spreadsheetId);
+      const cleanupResult = comprehensiveTempFileCleanup(false);
       if (cleanupResult.success) {
-        console.log(`🗑️ 一時ファイル削除完了: ${cleanupResult.deletedFiles}件`);
+        console.log(`🗑️ 包括的一時ファイルクリーンアップ完了: ${cleanupResult.deletedFiles}件削除`);
       } else {
-        console.log(`⚠️ 一時ファイル削除エラー: ${cleanupResult.error}`);
+        console.log(`⚠️ 包括的一時ファイルクリーンアップエラー: ${cleanupResult.error}`);
       }
     } catch (cleanupError) {
-      console.log(`⚠️ 一時ファイル削除でエラーが発生しましたが、処理は継続します: ${cleanupError.message}`);
+      console.log(`⚠️ 包括的一時ファイルクリーンアップでエラーが発生しましたが、処理は継続します: ${cleanupError.message}`);
     }
 
     // スタイル処理
@@ -79,6 +79,18 @@ function main() {
     
   } catch (error) {
     console.log(`❌ メイン処理エラー: ${error.message}`);
+    
+    // エラー時の自動クリーンアップ
+    console.log('🚨 エラー発生時の自動クリーンアップ開始');
+    try {
+      const cleanupResult = autoCleanupOnError(error);
+      if (cleanupResult.success) {
+        console.log(`✅ エラー時自動クリーンアップ完了: ${cleanupResult.deletedFiles}件削除`);
+      }
+    } catch (cleanupError) {
+      console.log(`⚠️ エラー時自動クリーンアップでエラー: ${cleanupError.message}`);
+    }
+    
     // エラー状況の進捗状況を表示
     showErrorStatus(error.message);
     throw error;
@@ -302,6 +314,104 @@ function executePhase5() {
   } catch (error) {
     console.error('❌ Phase 5 エラー:', error);
     return false;
+  }
+}
+
+/**
+ * 手動実行用: 一時ファイルクリーンアップ
+ * 処理が途中で止まった場合の残存ファイルを削除
+ * @returns {Object} クリーンアップ結果
+ */
+function manualTempFileCleanup() {
+  try {
+    console.log('=== 手動一時ファイルクリーンアップ開始 ===');
+    const startTime = new Date();
+    
+    // 進捗状況を表示
+    updateProgressStatus('🔄 一時ファイルクリーンアップ中...', 'processing');
+    
+    // 強制クリーンアップを実行
+    const cleanupResult = comprehensiveTempFileCleanup(true);
+    
+    const endTime = new Date();
+    const processingTime = endTime - startTime;
+    
+    if (cleanupResult.success) {
+      console.log(`✅ 手動クリーンアップ完了: ${cleanupResult.deletedFiles}件削除 (${processingTime}ms)`);
+      updateProgressStatus(`✅ 一時ファイルクリーンアップ完了: ${cleanupResult.deletedFiles}件削除`, 'success');
+    } else {
+      console.log(`❌ 手動クリーンアップ失敗: ${cleanupResult.error}`);
+      updateProgressStatus(`❌ 一時ファイルクリーンアップ失敗: ${cleanupResult.error}`, 'error');
+    }
+    
+    console.log('=== 手動一時ファイルクリーンアップ完了 ===');
+    return cleanupResult;
+    
+  } catch (error) {
+    console.log(`❌ 手動クリーンアップ実行エラー: ${error.message}`);
+    updateProgressStatus(`❌ 手動クリーンアップ実行エラー: ${error.message}`, 'error');
+    throw error;
+  }
+}
+
+/**
+ * 手動実行用: 定期一時ファイルクリーンアップ
+ * 定期的なメンテナンス用
+ * @returns {Object} クリーンアップ結果
+ */
+function manualScheduledTempFileCleanup() {
+  try {
+    console.log('=== 定期一時ファイルクリーンアップ開始 ===');
+    const startTime = new Date();
+    
+    // 進捗状況を表示
+    updateProgressStatus('⏰ 定期一時ファイルクリーンアップ中...', 'processing');
+    
+    // 定期クリーンアップを実行
+    const cleanupResult = scheduledTempFileCleanup();
+    
+    const endTime = new Date();
+    const processingTime = endTime - startTime;
+    
+    if (cleanupResult.success) {
+      console.log(`✅ 定期クリーンアップ完了: ${cleanupResult.deletedFiles}件削除 (${processingTime}ms)`);
+      updateProgressStatus(`✅ 定期一時ファイルクリーンアップ完了: ${cleanupResult.deletedFiles}件削除`, 'success');
+    } else {
+      console.log(`ℹ️ 定期クリーンアップ: ${cleanupResult.message}`);
+      updateProgressStatus(`ℹ️ 定期クリーンアップ: ${cleanupResult.message}`, 'info');
+    }
+    
+    console.log('=== 定期一時ファイルクリーンアップ完了 ===');
+    return cleanupResult;
+    
+  } catch (error) {
+    console.log(`❌ 定期クリーンアップ実行エラー: ${error.message}`);
+    updateProgressStatus(`❌ 定期クリーンアップ実行エラー: ${error.message}`, 'error');
+    throw error;
+  }
+}
+
+/**
+ * 一時ファイル管理状況の表示
+ * @returns {Object} 管理状況
+ */
+function showTempFileManagementStatus() {
+  try {
+    const status = getTempFileManagementStatus();
+    
+    console.log('=== 一時ファイル管理状況 ===');
+    console.log(`📊 登録済みファイル数: ${status.registeredFiles}件`);
+    console.log(`⏰ 最後のクリーンアップ: ${status.lastCleanup ? status.lastCleanup.toLocaleString('ja-JP') : '未実行'}`);
+    console.log(`🔍 現在の状態: ${status.status}`);
+    
+    // 進捗状況にも表示
+    updateProgressStatus(`📊 一時ファイル管理状況: ${status.registeredFiles}件登録中, 状態: ${status.status}`, 'info');
+    
+    return status;
+    
+  } catch (error) {
+    console.log(`❌ 一時ファイル管理状況表示エラー: ${error.message}`);
+    return null;
   }
 }
 
