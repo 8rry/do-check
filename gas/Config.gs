@@ -65,12 +65,29 @@ const CONFIG = {
     
     // 商品名称
     '商品名称': {
-      keywords: ['商品名']
+      keywords: ['商品名', '返礼品名'],
+      searchType: 'or'  // OR検索を指定（商品名または返礼品名のいずれかでマッチ）
     },
     
     // 配送伝票商品名称
     '配送伝票商品名称': {
-      keywords: ['商品名', '伝票記載用']
+      keywords: ['伝票記載用'],
+      // 複合条件: ('商品名' and '伝票記載用') or ('返礼品名' and '伝票記載用')
+      compoundConditions: [
+        {
+          type: 'or',
+          conditions: [
+            {
+              type: 'and',
+              keywords: ['商品名', '伝票記載用']
+            },
+            {
+              type: 'and', 
+              keywords: ['返礼品名', '伝票記載用']
+            }
+          ]
+        }
+      ]
     },
     
     // 発送種別
@@ -122,7 +139,7 @@ const CONFIG = {
     
     // 配送会社
     '配送会社': {
-      keywords: ['発送方法', '配送方法等'],
+      keywords: ['発送方法', '配送方法'],
       searchType: 'or',  // OR検索を指定
     },
     

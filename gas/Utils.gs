@@ -862,6 +862,111 @@ function matchKeywords(searchText, keywords) {
 }
 
 /**
+ * 複合条件によるキーワードマッチング
+ * @param {string} searchText - 検索対象のテキスト
+ * @param {Object} mappingRule - マッピングルール
+ * @returns {boolean} マッチするかどうか
+ */
+function matchCompoundConditions(searchText, mappingRule) {
+  try {
+    if (!searchText || !mappingRule) {
+      return false;
+    }
+    
+    // 通常のキーワードマッチングをチェック（searchTypeを考慮）
+    if (mappingRule.keywords && mappingRule.keywords.length > 0) {
+      const normalizedSearchText = searchText.toString().toLowerCase().trim();
+      let keywordsMatch = false;
+      
+      if (mappingRule.searchType === 'or') {
+        // OR検索: いずれかのキーワードが含まれていればOK
+        keywordsMatch = mappingRule.keywords.some(keyword => 
+          normalizedSearchText.includes(keyword.toLowerCase())
+        );
+      } else {
+        // AND検索（デフォルト）: すべてのキーワードが含まれている必要
+        keywordsMatch = mappingRule.keywords.every(keyword => 
+          normalizedSearchText.includes(keyword.toLowerCase())
+        );
+      }
+      
+      if (keywordsMatch) {
+        return true;
+      }
+    }
+    
+    // 複合条件をチェック
+    if (mappingRule.compoundConditions && mappingRule.compoundConditions.length > 0) {
+      for (const compoundCondition of mappingRule.compoundConditions) {
+        if (evaluateCompoundCondition(searchText, compoundCondition)) {
+          console.log(`✅ 複合条件マッチ: "${searchText}" → 条件: ${JSON.stringify(compoundCondition)}`);
+          return true;
+        }
+      }
+    }
+    
+    return false;
+    
+  } catch (error) {
+    console.log(`❌ 複合条件マッチングエラー: ${error.message}`);
+    return false;
+  }
+}
+
+/**
+ * 複合条件を評価
+ * @param {string} searchText - 検索対象のテキスト
+ * @param {Object} condition - 条件オブジェクト
+ * @returns {boolean} 条件にマッチするかどうか
+ */
+function evaluateCompoundCondition(searchText, condition) {
+  try {
+    if (!condition || !condition.type) {
+      return false;
+    }
+    
+    const normalizedSearchText = searchText.toString().toLowerCase().trim();
+    
+    switch (condition.type) {
+      case 'and':
+        // AND条件: 全てのキーワードが含まれている必要がある
+        if (condition.keywords && condition.keywords.length > 0) {
+          for (const keyword of condition.keywords) {
+            const normalizedKeyword = keyword.toString().toLowerCase().trim();
+            if (!normalizedSearchText.includes(normalizedKeyword)) {
+              return false;
+            }
+          }
+          return true;
+        }
+        break;
+        
+      case 'or':
+        // OR条件: いずれかの条件が満たされれば良い
+        if (condition.conditions && condition.conditions.length > 0) {
+          for (const subCondition of condition.conditions) {
+            if (evaluateCompoundCondition(searchText, subCondition)) {
+              return true;
+            }
+          }
+          return false;
+        }
+        break;
+        
+      default:
+        console.log(`⚠️ 未知の条件タイプ: ${condition.type}`);
+        return false;
+    }
+    
+    return false;
+    
+  } catch (error) {
+    console.log(`❌ 複合条件評価エラー: ${error.message}`);
+    return false;
+  }
+}
+
+/**
  * 部分一致による新・旧の判別付きキーワードマッチング
  * @param {string} searchText - 検索対象のテキスト
  * @param {Object} mappingRule - マッピングルール
@@ -873,9 +978,9 @@ function matchKeywordsWithOldNewCheck(searchText, mappingRule) {
       return { matched: false, isOld: false };
     }
     
-    // メインキーワードでマッチング
+    // メインキーワードでマッチング（複合条件対応）
     let hasMainKeywordMatch = false;
-    if (mappingRule.keywords && matchKeywords(searchText, mappingRule.keywords)) {
+    if (matchCompoundConditions(searchText, mappingRule)) {
       hasMainKeywordMatch = true;
     }
     
@@ -983,10 +1088,6 @@ function findBestDoMapping(searchText) {
     }
     
     if (bestMatch) {
-      const oldLabel = isOld ? ' (旧項目)' : '';
-      const newOldInfo = isOld ? ' [旧項目として判定]' : ' [新項目として判定]';
-      console.log(`🔍 Do項目マッチング: "${searchText}" → "${bestMatch}"${oldLabel} (スコア: ${bestScore})${newOldInfo}`);
-      
       return {
         doItem: bestMatch,
         isOld: isOld

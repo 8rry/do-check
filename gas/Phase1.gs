@@ -135,7 +135,7 @@ function extractProductDataFromSheet(sheet, tempFileId) {
     productNameRow = searchResults.row;
     
     if (!productNameColumn) {
-      throw new Error('商品名を含む列が見つかりませんでした');
+      throw new Error('商品名・返礼品名を含む列が見つかりませんでした');
     }
     
     // 発見した列とその右隣列から4行目以降のデータを抽出
@@ -194,7 +194,7 @@ function findProductNameColumn(sheet) {
       }
     }
     
-    throw new Error('最初の4列で商品名列が見つかりませんでした');
+    throw new Error('最初の4列で商品名・返礼品名列が見つかりませんでした（商品名、返礼品名を検索）');
     
   } catch (error) {
     console.log(`❌ 商品名列検索エラー: ${error.message}`);
@@ -212,12 +212,21 @@ function searchColumnForProductName(sheet, col) {
   try {
     const colLetter = getColumnLetter(col);
     
+    // 検索キーワードを拡張（商品名、返礼品名の両方に対応）
+    const searchKeywords = ['商品名', '返礼品名'];
+    
     // 最初の20行をチェック（高速化）
     for (let row = 1; row <= 20; row++) {
       const cellValue = sheet.getRange(row, col).getValue();
       
-      if (cellValue && typeof cellValue === 'string' && cellValue.includes('商品名')) {
-        return { found: true, column: col, row: row };
+      if (cellValue && typeof cellValue === 'string') {
+        // 複数のキーワードで検索
+        for (const keyword of searchKeywords) {
+          if (cellValue.includes(keyword)) {
+            console.log(`✅ 商品名列発見: 列${colLetter}の${row}行目 (キーワード: "${keyword}")`);
+            return { found: true, column: col, row: row, keyword: keyword };
+          }
+        }
       }
     }
     

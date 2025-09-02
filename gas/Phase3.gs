@@ -194,101 +194,17 @@ function findBestDoMapping(searchText) {
     
     // 各マッピングルールをチェック
     for (const [doItem, mappingRule] of Object.entries(CONFIG.DO_MAPPING)) {
-      // メインキーワードでマッチング（searchTypeに応じてAND検索またはOR検索）
-      let hasMainKeywordMatch = false;
-      let keywordScore = 0;
+      // Utils.gsのマッチング関数を使用
+      const matchResult = matchKeywordsWithOldNewCheck(searchText, mappingRule);
       
-      if (mappingRule.keywords && mappingRule.keywords.length > 0) {
-        // searchTypeに応じてAND検索またはOR検索を実行
-        let allKeywordsMatch = false;
-        
-        if (mappingRule.searchType === 'or') {
-          // OR検索: いずれかのキーワードが含まれていればOK
-          allKeywordsMatch = mappingRule.keywords.some(keyword => 
-            searchText.toLowerCase().includes(keyword.toLowerCase())
-          );
-          if (allKeywordsMatch) {
-            keywordScore = 1; // OR検索の場合はスコア1
-          }
-        } else {
-          // AND検索（デフォルト）: すべてのキーワードが含まれている必要
-          allKeywordsMatch = mappingRule.keywords.every(keyword => 
-            searchText.toLowerCase().includes(keyword.toLowerCase())
-          );
-          if (allKeywordsMatch) {
-            keywordScore = mappingRule.keywords.length;
-          }
-        }
-        
-        if (allKeywordsMatch) {
-          hasMainKeywordMatch = true;
-        }
-      }
-      
-      // fallbackKeywordsでマッチング（OR検索）
-      let hasFallbackMatch = false;
-      let fallbackScore = 0;
-      
-      if (mappingRule.fallbackKeywords) {
-        for (const fallbackKeyword of mappingRule.fallbackKeywords) {
-          if (searchText.toLowerCase().includes(fallbackKeyword.toLowerCase())) {
-            hasFallbackMatch = true;
-            fallbackScore += 1;
-          }
-        }
-      }
-      
-      // マッチング判定
-      if (hasMainKeywordMatch || hasFallbackMatch) {
-        // 新・旧の判定
-        let isNew = false;
-        let isOldItem = false;
-        
-        if (mappingRule.fallbackKeywords) {
-          for (const fallbackKeyword of mappingRule.fallbackKeywords) {
-            if (searchText.toLowerCase().includes(fallbackKeyword.toLowerCase())) {
-              if (fallbackKeyword.includes('(新)')) {
-                isNew = true;
-              } else if (fallbackKeyword.includes('(旧)')) {
-                isOldItem = true;
-              }
-            }
-          }
-        }
-        
-        // 部分一致による新・旧判定も追加
-        if (searchText.toLowerCase().includes('(新)') || 
-            searchText.toLowerCase().includes('新') ||
-            searchText.toLowerCase().includes('new')) {
-          isNew = true;
-        }
-        if (searchText.toLowerCase().includes('(旧)') || 
-            searchText.toLowerCase().includes('旧') ||
-            searchText.toLowerCase().includes('old')) {
-          isOldItem = true;
-        }
-        
-        // 新・旧の判定結果を決定
-        let finalIsOld = false;
-        if (isOldItem && !isNew) {
-          finalIsOld = true;
-        } else if (isNew && !isOldItem) {
-          finalIsOld = false;
-        } else if (isNew && isOldItem) {
-          // 新・旧両方の場合は設定された優先順位に従う
-          finalIsOld = mappingRule.priority !== 'new';
-        } else {
-          // 新・旧の判定なしの場合は新項目として扱う
-          finalIsOld = false;
-        }
-        
-        // スコア計算（メインキーワードの方が高スコア）
-        const totalScore = (keywordScore * 2) + fallbackScore;
+      if (matchResult.matched) {
+        // スコア計算（簡略化）
+        const totalScore = matchResult.isOld ? 0.5 : 1;
         
         if (totalScore > bestScore) {
           bestScore = totalScore;
           bestMatch = doItem;
-          isOld = finalIsOld;
+          isOld = matchResult.isOld;
         }
       }
     }
@@ -296,11 +212,9 @@ function findBestDoMapping(searchText) {
     if (bestMatch) {
       // 旧項目の場合はnullを返す（ラベルを付けない）
       if (isOld) {
-        console.log(`🔍 Do項目マッチング: "${searchText}" → "${bestMatch}" (旧項目のためラベルを付けません)`);
         return null;
       }
       
-      console.log(`🔍 Do項目マッチング: "${searchText}" → "${bestMatch}" (スコア: ${bestScore})`);
       return bestMatch;
     }
     
