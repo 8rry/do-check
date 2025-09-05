@@ -893,44 +893,59 @@ function processPeriod(startDate, endDate, startField, endField, typeField) {
     type: ''
   };
   
-  // 両方に「通年」キーワードが含まれている場合
+  console.log(`🔍 期間処理開始: 開始="${startDate}", 終了="${endDate}"`);
+  
+  // パターン①: 両方に「通年」キーワードが含まれている場合
   if (isYearRound(startDate) && isYearRound(endDate)) {
     result.type = '通年扱い';
     result.startDate = '';
     result.endDate = '';
-    console.log(`  - 両方「通年」: ${typeField}に「通年扱い」を設定`);
+    console.log(`  - パターン①: 両方「通年」→「通年扱い」`);
   }
-  // どちらかに「通年」キーワードが含まれている場合
-  else if (isYearRound(startDate) || isYearRound(endDate)) {
+  // パターン②: 開始日付 + 終了「通年」
+  else if (!isYearRound(startDate) && isYearRound(endDate)) {
+    result.type = '季節限定扱い';
+    result.startDate = normalizeDateWithEarlyLate(startDate, true); // 開始日
+    result.endDate = '2099/12/31'; // 固定値
+    console.log(`  - パターン②: 開始日付+終了「通年」→「季節限定扱い」`);
+  }
+  // パターン④: 開始「通年」 + 終了日付
+  else if (isYearRound(startDate) && !isYearRound(endDate)) {
     result.type = '季節限定扱い';
     
-    if (isYearRound(startDate)) {
-      // 開始日が「通年」の場合、今日の日付を設定
+    // 外部シートから日付を取得（情報抽出タブB1の値をキーとして使用）
+    try {
+      const b1Value = getInfoExtractionB1Value();
+      if (b1Value) {
+        result.startDate = getExternalPriceValueOptimized(b1Value);
+        console.log(`  - パターン④: 外部シートから日付取得 "${result.startDate}" (キー: "${b1Value}")`);
+      } else {
+        result.startDate = getTodayDate();
+        console.log(`  - パターン④: B1の値が空、今日の日付を使用 "${result.startDate}"`);
+      }
+    } catch (error) {
       result.startDate = getTodayDate();
-      result.endDate = normalizeDateFormat(endDate);
-      console.log(`  - 開始日「通年」: 開始日を今日の日付に設定`);
-    } else {
-      // 終了日が「通年」の場合、今日の日付を設定
-      result.startDate = normalizeDateFormat(startDate);
-      result.endDate = getTodayDate();
-      console.log(`  - 終了日「通年」: 終了日を今日の日付に設定`);
+      console.log(`  - パターン④: 外部シート取得失敗、今日の日付を使用 "${result.startDate}"`);
     }
+    
+    result.endDate = normalizeDateWithEarlyLate(endDate, false); // 終了日
   }
   // 両方に日付が入っている場合
   else if (startDate && endDate) {
     result.type = '季節限定扱い';
-    result.startDate = normalizeDateFormat(startDate);
-    result.endDate = normalizeDateFormat(endDate);
-    console.log(`  - 両方日付: ${typeField}に「季節限定扱い」を設定`);
+    result.startDate = normalizeDateWithEarlyLate(startDate, true); // 開始日
+    result.endDate = normalizeDateWithEarlyLate(endDate, false); // 終了日
+    console.log(`  - 両方日付: 「季節限定扱い」`);
   }
   // どちらか一方に日付が入っている場合
   else if (startDate || endDate) {
     result.type = '季節限定扱い';
-    result.startDate = startDate ? normalizeDateFormat(startDate) : '';
-    result.endDate = endDate ? normalizeDateFormat(endDate) : '';
-    console.log(`  - 片方日付: ${typeField}に「季節限定扱い」を設定`);
+    result.startDate = startDate ? normalizeDateWithEarlyLate(startDate, true) : ''; // 開始日
+    result.endDate = endDate ? normalizeDateWithEarlyLate(endDate, false) : ''; // 終了日
+    console.log(`  - 片方日付: 「季節限定扱い」`);
   }
   
+  console.log(`🔍 期間処理完了: 開始="${result.startDate}", 終了="${result.endDate}", 種別="${result.type}"`);
   return result;
 }
 
@@ -942,7 +957,7 @@ function processPeriod(startDate, endDate, startField, endField, typeField) {
 function isYearRound(text) {
   if (!text) return false;
   
-  const yearRoundKeywords = ['通年', '順次', '随時', '常時'];
+  const yearRoundKeywords = ['通年', '順次', '随時', '常時', '準備でき次第', '受付でき次第'];
   const textStr = text.toString().toLowerCase();
   
   return yearRoundKeywords.some(keyword => textStr.includes(keyword));
@@ -958,6 +973,133 @@ function getTodayDate() {
   const month = String(today.getMonth() + 1).padStart(2, '0');
   const day = String(today.getDate()).padStart(2, '0');
   return `${year}/${month}/${day}`;
+}
+
+/**
+ * 情報抽出タブのB1の値を取得
+ * @returns {string} B1の値
+ */
+function getInfoExtractionB1Value() {
+  try {
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    const sheetNames = spreadsheet.getSheets().map(sheet => sheet.getName());
+    console.log(`🔍 利用可能なシート名: ${JSON.stringify(sheetNames)}`);
+    
+    const sheet = spreadsheet.getSheetByName('情報抽出');
+    if (sheet) {
+      const b1Value = sheet.getRange('B1').getValue();
+      console.log(`🔍 情報抽出タブB1の値: "${b1Value}"`);
+      return b1Value ? b1Value.toString() : '';
+    }
+    console.log('⚠️ 情報抽出シートが見つかりません');
+    return '';
+  } catch (error) {
+    console.error('❌ 情報抽出シートB1取得エラー:', error);
+    return '';
+  }
+}
+
+/**
+ * 日付の正規化処理（上旬・下旬対応含む）
+ * @param {string} dateText - 日付テキスト
+ * @param {boolean} isStartDate - 開始日かどうか（デフォルト: true）
+ * @returns {string} 正規化された日付
+ */
+function normalizeDateWithEarlyLate(dateText, isStartDate = true) {
+  if (!dateText) return '';
+  
+  // 上旬・下旬が含まれている場合は変換
+  if (dateText.includes('上旬') || dateText.includes('下旬')) {
+    return convertEarlyLateToDate(dateText, null, isStartDate);
+  }
+  
+  // 通常の日付正規化
+  return normalizeDateFormat(dateText);
+}
+
+/**
+ * 上旬・下旬を具体的な日付に変換
+ * @param {string} text - 変換対象テキスト
+ * @param {number} year - 年（デフォルト: 現在の年）
+ * @param {boolean} isStartDate - 開始日かどうか（デフォルト: true）
+ * @returns {string} 変換後の日付（yyyy/mm/dd形式）
+ */
+function convertEarlyLateToDate(text, year = null, isStartDate = true) {
+  if (!text) return '';
+  
+  const textStr = text.toString();
+  
+  // 年が指定されていない場合は現在の年を使用
+  const currentYear = year || new Date().getFullYear();
+  
+  // 年月の抽出パターン
+  const monthPatterns = [
+    /(\d{1,2})月/,
+    /(\d{4})年(\d{1,2})月/
+  ];
+  
+  console.log(`🔍 正規表現テスト: "${textStr}"`);
+  console.log(`  - パターン1 (\\d{1,2})月: ${/(\d{1,2})月/g.test(textStr)}`);
+  console.log(`  - パターン2 (\\d{4})年(\\d{1,2})月: ${/(\d{4})年(\d{1,2})月/g.test(textStr)}`);
+  
+  console.log(`🔍 上旬・下旬変換開始: "${text}"`);
+  
+  for (const pattern of monthPatterns) {
+    const match = textStr.match(pattern);
+    console.log(`  - パターン ${pattern.source} でマッチ: ${match ? 'あり' : 'なし'}`);
+    if (match) {
+      console.log(`  - マッチ結果: ${JSON.stringify(match)}`);
+    }
+    
+    if (match) {
+      let targetYear = currentYear;
+      let targetMonth;
+      
+      if (pattern.source.includes('年')) {
+        // 2025年6月形式
+        const fullMatch = textStr.match(/(\d{4})年(\d{1,2})月/);
+        if (fullMatch) {
+          targetYear = parseInt(fullMatch[1]);
+          targetMonth = parseInt(fullMatch[2]);
+          console.log(`  - 年あり形式: ${targetYear}年${targetMonth}月`);
+        }
+      } else {
+        // 6月形式（年が入っていない場合は現在の年を使用）
+        targetMonth = parseInt(match[1]);
+        console.log(`🔍 年なし上旬・下旬変換: "${text}" → ${currentYear}年${targetMonth}月 (match[1]: "${match[1]}")`);
+      }
+      
+      if (targetMonth >= 1 && targetMonth <= 12) {
+        if (textStr.includes('上旬')) {
+          // 上旬の変換ルール
+          let day;
+          if (isStartDate) {
+            day = '01'; // 開始日: 上旬→1日
+          } else {
+            day = '15'; // 終了日: 上旬→15日
+          }
+          const result = `${targetYear}/${String(targetMonth).padStart(2, '0')}/${day}`;
+          console.log(`  - 上旬変換(${isStartDate ? '開始日' : '終了日'}): "${text}" → "${result}"`);
+          return result;
+        } else if (textStr.includes('下旬')) {
+          // 下旬の変換ルール
+          let day;
+          if (isStartDate) {
+            day = '16'; // 開始日: 下旬→16日
+          } else {
+            day = String(new Date(targetYear, targetMonth, 0).getDate()); // 終了日: 下旬→末日
+          }
+          const result = `${targetYear}/${String(targetMonth).padStart(2, '0')}/${String(day).padStart(2, '0')}`;
+          console.log(`  - 下旬変換(${isStartDate ? '開始日' : '終了日'}): "${text}" → "${result}"`);
+          return result;
+        }
+      }
+    }
+  }
+  
+  // 上旬・下旬が含まれていない場合は元のテキストを返す
+  console.log(`🔍 上旬・下旬なし: "${text}" → そのまま返却`);
+  return text;
 }
 
 /**
