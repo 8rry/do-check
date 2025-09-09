@@ -633,7 +633,7 @@ function generateChildMaster(data, count) {
     childData['配達会社用商品コード'] = `${data['商品コード']}-${count}`;
   }
   
-  // 商品名称変換: 【3回定期便】の部分を【1回目/3回定期便】に置換
+  // 商品名称変換: 【3回定期便】の部分を【3回定期便1回目】に置換
   if (data['商品名称']) {
     const originalProductName = data['商品名称'].toString();
     console.log(`🔍 子マスタ${count}生成 - 元の商品名称: "${originalProductName}"`);
@@ -643,22 +643,22 @@ function generateChildMaster(data, count) {
     let typeSuffix = '';
     
     if (subscriptionType.includes('回定期便')) {
-      // 回定期便の場合
+      // 回定期便の場合: 【2回定期便1回目】形式
       const totalCount = determineSubscriptionCount(originalProductName);
-      typeSuffix = `${count}回目/${totalCount}回定期便`;
+      typeSuffix = `${totalCount}回定期便${count}回目`;
     } else if (subscriptionType.includes('ヶ月定期便')) {
-      // ヶ月定期便の場合
+      // ヶ月定期便の場合: 【3ヶ月定期便1ヶ月目】形式
       const totalMonths = determineSubscriptionMonths(originalProductName);
-      typeSuffix = `${count}ヶ月目/${totalMonths}ヶ月定期便`;
+      typeSuffix = `${totalMonths}ヶ月定期便${count}ヶ月目`;
     } else {
-      // デフォルト
+      // デフォルト: 【2回定期便1回目】形式
       const totalCount = determineSubscriptionCount(originalProductName);
-      typeSuffix = `${count}回目/${totalCount}回定期便`;
+      typeSuffix = `${totalCount}回定期便${count}回目`;
     }
     
     console.log(`  - 生成するtypeSuffix: "${typeSuffix}"`);
     
-    // 【3回定期便】や【3ヶ月定期便】の部分を【1回目/3回定期便】や【1ヶ月目/3ヶ月定期便】に置換
+    // 【3回定期便】や【3ヶ月定期便】の部分を【3回定期便1回目】や【3ヶ月定期便1ヶ月目】に置換
     let productName = originalProductName
       .replace(/【\d+回定期便】/, `【${typeSuffix}】`)
       .replace(/【\d+ヶ月定期便】/, `【${typeSuffix}】`)
@@ -670,7 +670,7 @@ function generateChildMaster(data, count) {
     childData['商品名称'] = productName;
     console.log(`  - 生成後の商品名称: "${childData['商品名称']}"`);
     
-    // 伝票記載用商品名: ()形式で回数を記載、元の商品名も保持
+    // 伝票記載用商品名: ()形式で回数を記載、元の商品名も保持（例: (2回定期便1回目)商品名）
     let productNameWithoutBracket = originalProductName
       .replace(/【\d+回定期便】/, '')
       .replace(/【\d+ヶ月定期便】/, '')
@@ -782,7 +782,7 @@ function determineSubscriptionType(productName) {
     if (match) {
       const months = match[1];
       console.log(`🔍 定期便種別判定: "${text}" → ${months}ヶ月定期便`);
-      return `${months}ヶ月定期便：月によらず商品配送順指定`;
+      return `月によらず商品配送順指定`;
     }
   }
   
@@ -798,13 +798,13 @@ function determineSubscriptionType(productName) {
     if (match) {
       const count = match[1];
       console.log(`🔍 定期便種別判定: "${text}" → ${count}回定期便`);
-      return `${count}回定期便：月ごとに商品指定`;
+      return `月ごとに商品指定`;
     }
   }
   
   // デフォルト
   console.log(`🔍 定期便種別判定: "${text}" → デフォルト回定期便`);
-  return '回定期便：月ごとに商品指定';
+  return '月ごとに商品指定';
 }
 
 /**
