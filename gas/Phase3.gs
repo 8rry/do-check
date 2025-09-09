@@ -1,5 +1,5 @@
 /**
- * Phase 3: Do書き出し項目との紐付け
+ * Phase 3: Do書き出し項目との紐付け（最適化版）
  * 
  * 概要: 情報抽出タブのB列・C列の値を部分検索でDoマスタの項目と紐付け
  * 
@@ -7,8 +7,14 @@
  * 1. B列・C列の値からDo項目を自動判定
  * 2. 部分検索による柔軟なマッチング
  * 3. 優先順位を考慮した項目選択（旧・新の場合は新を優先）
- * 4. 情報抽出タブのA列への出力
+ * 4. 情報抽出タブのA列へのバッチ出力
+ * 5. ログ出力の最適化による高速化
+ * 6. マッピング結果のキャッシュによる重複処理削減
  */
+
+// Phase 3用のキャッシュ
+let phase3MappingCache = {};
+let phase3CacheTimestamp = null;
 
 /**
  * Phase 3のメイン実行関数
@@ -18,6 +24,7 @@
 function executePhase3(sheet) {
   try {
     console.log('=== Phase 3: Do書き出し項目との紐付け開始 ===');
+    const phase3StartTime = new Date();
     
     if (!sheet) {
       throw new Error('シートが指定されていません');
@@ -38,13 +45,17 @@ function executePhase3(sheet) {
     // 情報抽出タブのA列に出力
     const outputResult = outputToInfoExtractionTab(mappingResults);
     
+    const phase3EndTime = new Date();
+    const phase3ProcessingTime = phase3EndTime - phase3StartTime;
+    console.log(`⚡ Phase 3処理時間: ${phase3ProcessingTime}ms`);
     console.log('=== Phase 3: Do書き出し項目との紐付け完了 ===');
     
     return {
       success: true,
       processedRows: extractedData.length,
       mappedItems: mappingResults.filter(r => r.mapped).length,
-      outputResult: outputResult
+      outputResult: outputResult,
+      processingTime: phase3ProcessingTime
     };
     
   } catch (error) {
@@ -99,17 +110,15 @@ function extractInfoExtractionData() {
       const rowData = dataValues[i];
       const productName = rowData[0] || '';  // B列
       const rightColumn = rowData[1] || '';  // C列
+      const actualRow = CONFIG.OUTPUT.START_ROW + i;  // 実際の行番号
       
-      // 空行はスキップ
-      if (!productName && !rightColumn) {
-        continue;
-      }
-      
+      // 空行も含めて処理（行番号のずれを防ぐため）
       extractedData.push({
-        row: CONFIG.OUTPUT.START_ROW + i,
+        row: actualRow,
         productName: productName,
         rightColumn: rightColumn,
-        combinedText: `${productName} ${rightColumn}`.trim()
+        combinedText: `${productName} ${rightColumn}`.trim(),
+        isEmpty: !productName && !rightColumn  // 空行フラグを追加
       });
     }
     
@@ -135,7 +144,21 @@ function performDoMapping(extractedData) {
     let mappedCount = 0;
     let unmappedCount = 0;
     
+    // バッチ処理用の配列を準備
+    const batchSize = CONFIG.PERFORMANCE.PHASE3_BATCH_SIZE || 50;
+    let processedCount = 0;
+    
     for (const data of extractedData) {
+      // 空行の場合はスキップしてマッピング結果に追加
+      if (data.isEmpty) {
+        mappingResults.push({
+          ...data,
+          doItem: null,
+          mapped: false
+        });
+        continue;
+      }
+      
       // 商品名と右隣列の値を組み合わせて検索
       const searchText = data.combinedText;
       
@@ -149,10 +172,6 @@ function performDoMapping(extractedData) {
           mapped: true
         });
         mappedCount++;
-        
-        if (CONFIG.PERFORMANCE.LOG_DETAIL) {
-          console.log(`✅ マッピング成功: 行${data.row} "${searchText}" → "${doItem}"`);
-        }
       } else {
         mappingResults.push({
           ...data,
@@ -160,7 +179,12 @@ function performDoMapping(extractedData) {
           mapped: false
         });
         unmappedCount++;
-        
+      }
+      
+      // バッチ処理の進捗をログ出力（詳細ログは無効化）
+      processedCount++;
+      if (processedCount % batchSize === 0) {
+        console.log(`📊 マッピング進捗: ${processedCount}/${extractedData.length}件処理完了`);
       }
     }
     
@@ -178,7 +202,7 @@ function performDoMapping(extractedData) {
 }
 
 /**
- * 最適なDo項目を検索
+ * 最適なDo項目を検索（キャッシュ付き）
  * @param {string} searchText - 検索テキスト
  * @returns {string|null} マッピング結果
  */
@@ -186,6 +210,16 @@ function findBestDoMapping(searchText) {
   try {
     if (!searchText || !CONFIG.DO_MAPPING) {
       return null;
+    }
+    
+    // キャッシュをチェック
+    const cacheKey = searchText.toLowerCase().trim();
+    const now = new Date().getTime();
+    const cacheTTL = CONFIG.PERFORMANCE.PHASE3_CACHE_TTL || 10 * 60 * 1000; // 10分
+    
+    if (phase3MappingCache[cacheKey] && phase3CacheTimestamp && 
+        (now - phase3CacheTimestamp) < cacheTTL) {
+      return phase3MappingCache[cacheKey];
     }
     
     let bestMatch = null;
@@ -209,16 +243,19 @@ function findBestDoMapping(searchText) {
       }
     }
     
+    let result = null;
     if (bestMatch) {
       // 旧項目の場合はnullを返す（ラベルを付けない）
-      if (isOld) {
-        return null;
+      if (!isOld) {
+        result = bestMatch;
       }
-      
-      return bestMatch;
     }
     
-    return null;
+    // キャッシュに保存
+    phase3MappingCache[cacheKey] = result;
+    phase3CacheTimestamp = now;
+    
+    return result;
     
   } catch (error) {
     console.log(`❌ Do項目検索エラー: ${error.message}`);
@@ -267,24 +304,20 @@ function outputToInfoExtractionTab(mappingResults) {
       console.log(`🗑️ A列クリア完了: ${CONFIG.OUTPUT.START_ROW}行目〜${lastRow}行目`);
     }
     
-    // A列にDo項目を出力
-    console.log('📤 A列にDo項目を出力開始');
+    // A列にDo項目を個別出力（正確な行番号で出力）
+    console.log('📤 A列にDo項目を個別出力開始');
     if (mappingResults.length > 0) {
       let outputCount = 0;
       
+      // 各行を正確な行番号に出力
       for (const result of mappingResults) {
         if (result.doItem) {
-          const row = result.row;
-          sheet.getRange(row, 1).setValue(result.doItem);
+          sheet.getRange(result.row, 1).setValue(result.doItem);
           outputCount++;
-          
-          if (CONFIG.PERFORMANCE.LOG_DETAIL) {
-            console.log(`✅ A列にDo項目を出力: 行${row} "${result.doItem}"`);
-          }
         }
       }
       
-      console.log(`✅ 出力完了: ${outputCount}件のDo項目を出力`);
+      console.log(`✅ 個別出力完了: ${outputCount}件のDo項目を出力`);
     }
     
     console.log('🎉 情報抽出タブのA列への出力完了');
@@ -304,6 +337,31 @@ function outputToInfoExtractionTab(mappingResults) {
       stack: error.stack
     };
   }
+}
+
+/**
+ * Phase 3のキャッシュをクリア
+ */
+function clearPhase3Cache() {
+  phase3MappingCache = {};
+  phase3CacheTimestamp = null;
+  console.log('🗑️ Phase 3キャッシュをクリアしました');
+}
+
+/**
+ * Phase 3のキャッシュ状態を取得
+ * @returns {Object} キャッシュ状態
+ */
+function getPhase3CacheStatus() {
+  const cacheSize = Object.keys(phase3MappingCache).length;
+  const now = new Date().getTime();
+  const cacheAge = phase3CacheTimestamp ? (now - phase3CacheTimestamp) / 1000 : 0;
+  
+  return {
+    cacheSize: cacheSize,
+    cacheAge: Math.round(cacheAge),
+    isExpired: cacheAge > (CONFIG.PERFORMANCE.PHASE3_CACHE_TTL || 600000) / 1000
+  };
 }
 
 /**

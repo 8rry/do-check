@@ -46,36 +46,47 @@ function main() {
     }
     
     if (parallelResults.phase3) {
-      console.log(`✅ Phase 3完了: ${parallelResults.phase3.processedRows || 0}行処理`);
+      const phase3Time = parallelResults.phase3.processingTime || 0;
+      console.log(`✅ Phase 3完了: ${parallelResults.phase3.processedRows || 0}行処理 (${phase3Time}ms)`);
     }
     
-    // 包括的一時ファイルクリーンアップ
-    console.log('🗑️ 包括的一時ファイルクリーンアップ開始');
+    // 簡易一時ファイルクリーンアップ（高速化）
+    console.log('🗑️ 簡易一時ファイルクリーンアップ開始');
     try {
       const cleanupResult = comprehensiveTempFileCleanup(false);
       if (cleanupResult.success) {
-        console.log(`🗑️ 包括的一時ファイルクリーンアップ完了: ${cleanupResult.deletedFiles}件削除`);
+        console.log(`🗑️ 簡易一時ファイルクリーンアップ完了: ${cleanupResult.deletedFiles}件削除`);
       } else {
-        console.log(`⚠️ 包括的一時ファイルクリーンアップエラー: ${cleanupResult.error}`);
+        console.log(`⚠️ 簡易一時ファイルクリーンアップエラー: ${cleanupResult.error}`);
       }
     } catch (cleanupError) {
-      console.log(`⚠️ 包括的一時ファイルクリーンアップでエラーが発生しましたが、処理は継続します: ${cleanupError.message}`);
+      console.log(`⚠️ 簡易一時ファイルクリーンアップでエラーが発生しましたが、処理は継続します: ${cleanupError.message}`);
     }
 
-    // スタイル処理
-    SpreadsheetApp.getActiveSheet()
-    .getDataRange()
-    .setFontSize(9)
-    .setFontFamily("Noto Sans JP")
-    .setVerticalAlignment("middle");
+    // スタイル処理（最適化版）
+    try {
+      const activeSheet = SpreadsheetApp.getActiveSheet();
+      const dataRange = activeSheet.getDataRange();
+      dataRange.setFontSize(9);
+      dataRange.setFontFamily("Noto Sans JP");
+      dataRange.setVerticalAlignment("middle");
+      console.log('✅ スタイル処理完了');
+    } catch (styleError) {
+      console.log(`⚠️ スタイル処理でエラーが発生しましたが、処理は継続します: ${styleError.message}`);
+    }
     
     const endTime = new Date();
     const processingTime = endTime - startTime;
     console.log(`⚡ 処理完了: ${processingTime}ms`);
     console.log('=== 処理完了 ===');
     
-    // 全処理完了の進捗状況を表示
-    showCompleteStatus();
+    // 全処理完了の進捗状況を表示（最適化版）
+    try {
+      showCompleteStatus();
+      console.log('✅ 進捗状況更新完了');
+    } catch (statusError) {
+      console.log(`⚠️ 進捗状況更新でエラーが発生しましたが、処理は継続します: ${statusError.message}`);
+    }
     
   } catch (error) {
     console.log(`❌ メイン処理エラー: ${error.message}`);

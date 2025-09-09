@@ -899,7 +899,7 @@ function matchCompoundConditions(searchText, mappingRule) {
     if (mappingRule.compoundConditions && mappingRule.compoundConditions.length > 0) {
       for (const compoundCondition of mappingRule.compoundConditions) {
         if (evaluateCompoundCondition(searchText, compoundCondition)) {
-          console.log(`✅ 複合条件マッチ: "${searchText}" → 条件: ${JSON.stringify(compoundCondition)}`);
+          // ログ出力を削減（詳細ログは無効化）
           return true;
         }
       }
@@ -1008,44 +1008,35 @@ function matchKeywordsWithOldNewCheck(searchText, mappingRule) {
       }
     }
     
-    // 新・旧の判定結果を返す
+    // 新・旧の判定結果を返す（ログ出力を削減）
     if (hasMainKeywordMatch) {
       // メインキーワードでマッチした場合、新・旧の判定も行う
       if (isOld && !isNew) {
         // 旧のみの場合
-        console.log(`🔍 新・旧判定: メインキーワードマッチ + 旧キーワード検出 → 旧項目として判定`);
         return { matched: true, isOld: true };
       } else if (isNew && !isOld) {
         // 新のみの場合
-        console.log(`🔍 新・旧判定: メインキーワードマッチ + 新キーワード検出 → 新項目として判定`);
         return { matched: true, isOld: false };
       } else if (isNew && isOld) {
         // 新・旧両方の場合（新を優先）
-        console.log(`🔍 新・旧判定: メインキーワードマッチ + 新・旧両方のキーワード検出 → 新を優先して新項目として判定`);
         return { matched: true, isOld: false };
       } else {
         // 新・旧の判定なし
-        const reason = '新・旧キーワードなし';
-        console.log(`🔍 新・旧判定: メインキーワードマッチ + ${reason} → 新項目として判定`);
         return { matched: true, isOld: false };
       }
     } else {
       // メインキーワードでマッチしない場合
       if (isNew && !isOld) {
         // 新のみの場合
-        console.log(`🔍 新・旧判定: 新キーワードのみ検出 → 新項目として判定`);
         return { matched: true, isOld: false };
       } else if (isOld && !isNew) {
         // 旧のみの場合
-        console.log(`🔍 新・旧判定: 旧キーワードのみ検出 → 旧項目として判定`);
         return { matched: true, isOld: true };
       } else if (isNew && isOld) {
         // 新・旧両方の場合（新を優先）
-        console.log(`🔍 新・旧判定: 新・旧両方のキーワード検出 → 新を優先して新項目として判定`);
         return { matched: true, isOld: false };
       } else {
         // 新・旧の判定なし
-        console.log(`🔍 新・旧判定: 新・旧のキーワードなし → マッチなし`);
         return { matched: false, isOld: false };
       }
     }
@@ -1179,16 +1170,20 @@ function comprehensiveTempFileCleanup(forceCleanup = false) {
       globalTempFileIds = [];
     }
     
-    // 2. パターンマッチによる一時ファイル検索・削除
+    // 2. パターンマッチによる一時ファイル検索・削除（最適化版）
     try {
       const tempFiles = DriveApp.getFilesByName(`temp_*`);
       let patternMatchedFiles = 0;
+      let processedCount = 0;
+      const maxProcessFiles = 10; // 最大処理ファイル数を制限
       
-      while (tempFiles.hasNext()) {
+      while (tempFiles.hasNext() && processedCount < maxProcessFiles) {
         const tempFile = tempFiles.next();
         const fileName = tempFile.getName();
         const fileDate = tempFile.getDateCreated();
         const hoursDiff = (now - fileDate) / (1000 * 60 * 60);
+        
+        processedCount++;
         
         // 強制クリーンアップまたは古いファイル（12時間以上前）を削除
         if (forceCleanup || hoursDiff > 12) {
@@ -1205,7 +1200,7 @@ function comprehensiveTempFileCleanup(forceCleanup = false) {
         }
       }
       
-      console.log(`🔍 パターンマッチ一時ファイル: ${patternMatchedFiles}件削除`);
+      console.log(`🔍 パターンマッチ一時ファイル: ${patternMatchedFiles}件削除 (${processedCount}件処理)`);
       
     } catch (searchError) {
       const errorMsg = `パターンマッチ一時ファイル検索エラー: ${searchError.message}`;
@@ -1213,47 +1208,9 @@ function comprehensiveTempFileCleanup(forceCleanup = false) {
       errors.push(errorMsg);
     }
     
-    // 3. 古い一時ファイルの検索・削除（より広範囲）
-    try {
-      const allFiles = DriveApp.getFiles();
-      let oldTempFiles = 0;
-      
-      while (allFiles.hasNext()) {
-        const file = allFiles.next();
-        const fileName = file.getName();
-        
-        // temp_で始まるファイルまたは特定のパターン
-        if (fileName.startsWith('temp_') || 
-            fileName.includes('temp_') || 
-            fileName.includes('converted_') ||
-            fileName.includes('temp_')) {
-          
-          const fileDate = file.getDateCreated();
-          const hoursDiff = (now - fileDate) / (1000 * 60 * 60);
-          
-          // 強制クリーンアップまたは古いファイル（6時間以上前）を削除
-          if (forceCleanup || hoursDiff > 6) {
-            try {
-              file.setTrashed(true);
-              console.log(`✅ 古い一時ファイル削除: ${fileName} (${Math.round(hoursDiff)}時間前)`);
-              deletedFiles++;
-              oldTempFiles++;
-            } catch (deleteError) {
-              const errorMsg = `古い一時ファイル削除エラー: ${fileName} - ${deleteError.message}`;
-              console.log(`❌ ${errorMsg}`);
-              errors.push(errorMsg);
-            }
-          }
-        }
-      }
-      
-      console.log(`🔍 古い一時ファイル: ${oldTempFiles}件削除`);
-      
-    } catch (searchError) {
-      const errorMsg = `古い一時ファイル検索エラー: ${searchError.message}`;
-      console.log(`⚠️ ${errorMsg}`);
-      errors.push(errorMsg);
-    }
+    // 3. 古い一時ファイルの検索・削除（最適化版 - スキップ）
+    // 注意: 全ファイル検索は処理が重いため、登録済みファイルのみクリーンアップ
+    console.log(`🔍 古い一時ファイル検索: スキップ（処理負荷軽減のため）`);
     
     // クリーンアップ時間を記録
     globalTempFileCleanupTime = now;
