@@ -640,6 +640,19 @@ function generateChildMaster(data, count) {
     childData['配達会社用商品コード'] = `${data['商品コード']}-${count}`;
   }
   
+  // 寄付金額1を0に設定（定期便の子コードは0円）
+  childData['寄附金額1'] = '0';
+  console.log(`💰 子マスタ${count}: 寄附金額1を0に設定`);
+  
+  // 提供価格(税込)1を総額÷回数に設定
+  if (data['提供価格(税込)1']) {
+    const totalPrice = parseFloat(data['提供価格(税込)1']) || 0;
+    const subscriptionCount = determineSubscriptionCount(data['商品名称']) || 1;
+    const pricePerDelivery = Math.floor(totalPrice / subscriptionCount);
+    childData['提供価格(税込)1'] = pricePerDelivery.toString();
+    console.log(`💰 子マスタ${count}: 提供価格(税込)1を総額${totalPrice}÷${subscriptionCount}回=${pricePerDelivery}に設定`);
+  }
+  
   // 商品名称変換: 【3回定期便】の部分を【3回定期便1回目】に置換
   if (data['商品名称']) {
     const originalProductName = data['商品名称'].toString();
@@ -1131,6 +1144,12 @@ function convertShippingCompany(shippingCompany) {
     return 'ヤマト運輸';
   }
   
+  // 自治体提供 (SCM) → ヤマト運輸
+  if (company.includes('自治体提供') || company.includes('SCM')) {
+    console.log(`🚚 配送会社変換: "${company}" → "ヤマト運輸" (自治体提供→ヤマト運輸)`);
+    return 'ヤマト運輸';
+  }
+  
   // 佐川急便
   if (company.includes('佐川')) {
     console.log(`🚚 配送会社変換: "${company}" → "佐川急便"`);
@@ -1268,6 +1287,10 @@ function outputToSingleTab(tab, data) {
     outputData['出荷可能日フラグ(祝日)'] = '有';
     outputData['出品ステータス'] = '出品中';
     
+    // 出荷時サイズの出力を停止（エラー防止のため）
+    delete outputData['出荷時サイズ'];
+    console.log('🚫 出荷時サイズの出力を停止しました');
+    
     // 配送会社変換処理
     if (outputData['配送会社']) {
       outputData['配送会社'] = convertShippingCompany(outputData['配送会社']);
@@ -1339,6 +1362,10 @@ function outputToSubscriptionTab(tab, data) {
     outputData['出荷可能日フラグ(日)'] = '有';
     outputData['出荷可能日フラグ(祝日)'] = '有';
     outputData['出品ステータス'] = '出品中';
+    
+    // 出荷時サイズの出力を停止（エラー防止のため）
+    delete outputData['出荷時サイズ'];
+    console.log('🚫 出荷時サイズの出力を停止しました');
     
     // 配送会社変換処理
     if (outputData['配送会社']) {
@@ -1561,6 +1588,10 @@ function outputToSingleTabOptimized(tab, data) {
     outputData['出荷可能日フラグ(祝日)'] = '有';
     outputData['出品ステータス'] = '出品中';
     
+    // 出荷時サイズの出力を停止（エラー防止のため）
+    delete outputData['出荷時サイズ'];
+    console.log('🚫 出荷時サイズの出力を停止しました');
+    
     // 5. 外部シート参照（キャッシュ使用）
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const infoSheet = ss.getSheetByName('情報抽出');
@@ -1630,6 +1661,10 @@ function outputToSubscriptionTabOptimized(tab, data) {
     outputData['出荷可能日フラグ(日)'] = '有';
     outputData['出荷可能日フラグ(祝日)'] = '有';
     outputData['出品ステータス'] = '出品中';
+    
+    // 出荷時サイズの出力を停止（エラー防止のため）
+    delete outputData['出荷時サイズ'];
+    console.log('🚫 出荷時サイズの出力を停止しました');
     
     // 5. 外部シート参照（キャッシュ使用）
     const ss = SpreadsheetApp.getActiveSpreadsheet();
