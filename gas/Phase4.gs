@@ -348,24 +348,31 @@ function normalizeDateFormat(dateText) {
   
   const text = dateText.toString();
   
+  // 目安日付の除外処理（例：10月上旬(目安：10/10) → 10月上旬）
+  const cleanedText = text.replace(/\(目安[：:]\s*\d{1,2}\/\d{1,2}\)/, '');
+  console.log(`🔍 目安日付除外: "${text}" → "${cleanedText}"`);
+  
+  // 処理対象のテキストを更新
+  const processedText = cleanedText;
+  
   // JavaScriptのDate文字列形式（Wed Mar 18 2026 16:00:00 GMT+0900 (日本標準時)など）
-  if (text.includes('GMT') || text.includes('UTC') || text.includes('GMT+') || text.includes('GMT-')) {
+  if (processedText.includes('GMT') || processedText.includes('UTC') || processedText.includes('GMT+') || processedText.includes('GMT-')) {
     try {
-      const date = new Date(text);
+      const date = new Date(processedText);
       if (!isNaN(date.getTime())) {
         const year = date.getFullYear();
         const month = String(date.getMonth() + 1).padStart(2, '0');
         const day = String(date.getDate()).padStart(2, '0');
-        console.log(`🔍 Date文字列変換: "${text}" → "${year}/${month}/${day}"`);
+        console.log(`🔍 Date文字列変換: "${processedText}" → "${year}/${month}/${day}"`);
         return `${year}/${month}/${day}`;
       }
     } catch (error) {
-      console.log(`⚠️ Date文字列変換エラー: "${text}"`, error);
+      console.log(`⚠️ Date文字列変換エラー: "${processedText}"`, error);
     }
   }
   
   // yyyy年mm月dd日 → yyyy/mm/dd
-  const japaneseMatch = text.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
+  const japaneseMatch = processedText.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
   if (japaneseMatch) {
     const year = japaneseMatch[1];
     const month = japaneseMatch[2].padStart(2, '0');
@@ -374,7 +381,7 @@ function normalizeDateFormat(dateText) {
   }
   
   // yyyy-mm-dd → yyyy/mm/dd
-  const dashMatch = text.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  const dashMatch = processedText.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (dashMatch) {
     const year = dashMatch[1];
     const month = dashMatch[2].padStart(2, '0');
@@ -383,20 +390,20 @@ function normalizeDateFormat(dateText) {
   }
   
   // yyyy/mm/dd → そのまま返す（既に正しい形式）
-  const slashMatch = text.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
+  const slashMatch = processedText.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
   if (slashMatch) {
-    return text; // 既に正しい形式なのでそのまま返す
+    return processedText; // 既に正しい形式なのでそのまま返す
   }
   
   // 上旬/下旬 → 具体的日付
-  const earlyMatch = text.match(/(\d{4})年(\d{1,2})月上旬/);
+  const earlyMatch = processedText.match(/(\d{4})年(\d{1,2})月上旬/);
   if (earlyMatch) {
     const year = earlyMatch[1];
     const month = earlyMatch[2].padStart(2, '0');
-    return `${year}/${month}/15`;
+    return `${year}/${month}/01`;
   }
   
-  const lateMatch = text.match(/(\d{4})年(\d{1,2})月下旬/);
+  const lateMatch = processedText.match(/(\d{4})年(\d{1,2})月下旬/);
   if (lateMatch) {
     const year = lateMatch[1];
     const month = lateMatch[2].padStart(2, '0');
@@ -405,7 +412,7 @@ function normalizeDateFormat(dateText) {
   }
   
   // その他の形式の場合はログ出力して元の値を返す
-  console.log(`⚠️ 未対応の日付形式: "${text}" (型: ${typeof dateText})`);
+  console.log(`⚠️ 未対応の日付形式: "${processedText}" (型: ${typeof dateText})`);
   return dateText;
 }
 
