@@ -520,7 +520,7 @@ function processSubscriptionProducts(cleanedData) {
         const subscriptionType = determineSubscriptionType(data['商品名称']);
         let subscriptionCount;
         
-        if (subscriptionType.includes('ヶ月定期便')) {
+        if (subscriptionType === 'ヶ月定期便') {
           // ヶ月定期便の場合
           subscriptionCount = determineSubscriptionMonths(data['商品名称']);
           console.log(`🔍 ヶ月定期便判定: "${data['商品名称']}" → ${subscriptionCount}ヶ月`);
@@ -802,7 +802,7 @@ function determineSubscriptionType(productName) {
     if (match) {
       const months = match[1];
       console.log(`🔍 定期便種別判定: "${text}" → ${months}ヶ月定期便`);
-      return `月によらず商品配送順指定`;
+      return 'ヶ月定期便'; // 修正: 説明文ではなく種類を返す
     }
   }
   
@@ -818,13 +818,13 @@ function determineSubscriptionType(productName) {
     if (match) {
       const count = match[1];
       console.log(`🔍 定期便種別判定: "${text}" → ${count}回定期便`);
-      return `月ごとに商品指定`;
+      return '回定期便'; // 修正: 説明文ではなく種類を返す
     }
   }
   
   // デフォルト
   console.log(`🔍 定期便種別判定: "${text}" → デフォルト回定期便`);
-  return '月ごとに商品指定';
+  return '回定期便'; // 修正: 説明文ではなく種類を返す
 }
 
 /**
