@@ -1201,6 +1201,183 @@ function convertTaxType(taxType) {
 }
 
 /**
+ * 複数返礼品コードを解析
+ * @param {string} productCode - 返礼品コード文字列
+ * @returns {Array} 解析されたコード配列
+ */
+function parseMultipleProductCodes(productCode) {
+  if (!productCode) return [];
+  
+  const codeString = productCode.toString();
+  console.log(`🔍 返礼品コード解析開始: "${codeString}"`);
+  
+  // コロンで区切られている場合の処理
+  if (codeString.includes('：')) {
+    const parts = codeString.split('：');
+    const codes = [];
+    
+    parts.forEach(part => {
+      const trimmedPart = part.trim();
+      if (trimmedPart) {
+        // ハイフンと数字と英語で構成されたコードを抽出
+        // パターン1: 086-1034-A (カラーバリエーション)
+        // パターン2: 019-1458-202511 (月別)
+        // パターン3: 086-1034 (基本コード)
+        
+        // カラーバリエーション: 086-1034-A
+        const colorMatch = trimmedPart.match(/(\d{3}-\d{4}-[A-H])/);
+        if (colorMatch) {
+          codes.push(colorMatch[1]);
+          return;
+        }
+        
+        // 月別: 019-1458-202511
+        const monthlyMatch = trimmedPart.match(/(\d{3}-\d{4}-\d{6})/);
+        if (monthlyMatch) {
+          codes.push(monthlyMatch[1]);
+          return;
+        }
+        
+        // 基本コード: 086-1034
+        const basicMatch = trimmedPart.match(/(\d{3}-\d{4})/);
+        if (basicMatch) {
+          codes.push(basicMatch[1]);
+        }
+      }
+    });
+    
+    // 親コードを除外（最初のコードが親コードの場合）
+    if (codes.length > 1) {
+      const firstCode = codes[0];
+      const parentCode = firstCode.replace(/-[A-Z]\d{6}$/, ''); // 末尾の-A202511などを除去
+      
+      // 最初のコードが親コードかチェック
+      if (firstCode === parentCode) {
+        codes.shift(); // 親コードを削除
+        console.log(`📋 親コード除外: "${firstCode}"`);
+      }
+    }
+    
+    console.log(`📋 コロン区切りで${codes.length}個のコードを検出:`, codes);
+    return codes;
+  }
+  
+  // 単一コードの場合
+  return [codeString];
+}
+
+/**
+ * 複数の返礼品コードを出力
+ * @param {Sheet} tab - 出力先タブ
+ * @param {Object} data - 出力データ
+ * @param {Array} codes - 返礼品コード配列
+ * @returns {boolean} 出力結果
+ */
+function outputMultipleProductCodes(tab, data, codes) {
+  try {
+    console.log(`📤 複数返礼品コード出力開始: ${codes.length}個のコード`);
+    
+    let successCount = 0;
+    
+    codes.forEach((code, index) => {
+      try {
+        // 各コード用のデータを作成
+        const codeData = { ...data };
+        codeData['商品コード'] = code;
+        codeData['配達会社用商品コード'] = code;
+        
+        // 商品名称を更新（カラバリや月別の情報を追加）
+        const updatedProductName = updateProductNameForCode(data['商品名称'], code, index);
+        if (updatedProductName) {
+          codeData['商品名称'] = updatedProductName;
+        }
+        
+        console.log(`📝 コード${index + 1}出力: "${code}" - "${codeData['商品名称']}"`);
+        
+        // 単一コードとして出力
+        const result = outputSingleProductCode(tab, codeData);
+        if (result) {
+          successCount++;
+        }
+        
+      } catch (error) {
+        console.error(`❌ コード${index + 1}の出力エラー:`, error);
+      }
+    });
+    
+    console.log(`✅ 複数返礼品コード出力完了: ${successCount}/${codes.length}件成功`);
+    return successCount > 0;
+    
+  } catch (error) {
+    console.error('❌ 複数返礼品コード出力エラー:', error);
+    return false;
+  }
+}
+
+/**
+ * コードに応じて商品名称を更新
+ * @param {string} originalName - 元の商品名称
+ * @param {string} code - 返礼品コード
+ * @param {number} index - インデックス
+ * @returns {string} 更新された商品名称
+ */
+function updateProductNameForCode(originalName, code, index) {
+  if (!originalName) return '';
+  
+  const name = originalName.toString();
+  
+  // カラバリ系の処理（-A, -B, -C など）
+  if (code.includes('-A') || code.includes('-B') || code.includes('-C') || 
+      code.includes('-D') || code.includes('-E') || code.includes('-F') || 
+      code.includes('-G') || code.includes('-H')) {
+    
+    // カラーバリエーション名を抽出
+    const colorMatch = code.match(/-([A-H])$/);
+    if (colorMatch) {
+      const colorCode = colorMatch[1];
+      const colorNames = {
+        'A': 'アラスカブラック',
+        'B': 'アラスカブラウン', 
+        'C': 'アラスカブルー',
+        'D': 'アラスカライトブルー',
+        'E': 'アラスカイエロー',
+        'F': 'ブラック',
+        'G': 'ブルー',
+        'H': 'レッド'
+      };
+      
+      const colorName = colorNames[colorCode] || colorCode;
+      console.log(`🎨 カラバリ更新: "${name}" → "${name} ${colorName}"`);
+      return `${name} ${colorName}`;
+    }
+  }
+  
+  // 月別系の処理（-202511, -202512 など）
+  if (code.match(/-\d{6}$/)) {
+    const monthMatch = code.match(/-(\d{6})$/);
+    if (monthMatch) {
+      const monthCode = monthMatch[1];
+      const year = monthCode.substring(0, 4);
+      const month = monthCode.substring(4, 6);
+      
+      // 月名を取得
+      const monthNames = {
+        '01': '1月', '02': '2月', '03': '3月', '04': '4月',
+        '05': '5月', '06': '6月', '07': '7月', '08': '8月',
+        '09': '9月', '10': '10月', '11': '11月', '12': '12月'
+      };
+      
+      const monthName = monthNames[month] || month + '月';
+      console.log(`📅 月別更新: "${name}" → "${name} ${monthName}発送"`);
+      return `${name} ${monthName}発送`;
+    }
+  }
+  
+  // その他の場合は元の名称をそのまま使用
+  return name;
+}
+
+/**
  * Do書き出し用タブにデータを出力
  * @param {Object} cleanedData - クレンジングされたデータ
  * @param {Object} productTypes - 商品種別マップ
@@ -1263,6 +1440,31 @@ function outputToDoTabs(cleanedData, productTypes) {
  * @returns {boolean} 出力結果
  */
 function outputToSingleTab(tab, data) {
+  try {
+    // 複数返礼品コードの処理
+    const multipleCodes = parseMultipleProductCodes(data['商品コード']);
+    
+    if (multipleCodes.length > 1) {
+      console.log(`🔍 複数返礼品コード検出: ${multipleCodes.length}個のコード`);
+      return outputMultipleProductCodes(tab, data, multipleCodes);
+    }
+    
+    // 単一コードの場合は従来通りの処理
+    return outputSingleProductCode(tab, data);
+    
+  } catch (error) {
+    console.error('❌ 単一商品用タブへの出力エラー:', error);
+    return false;
+  }
+}
+
+/**
+ * 単一の返礼品コードを出力
+ * @param {Sheet} tab - 出力先タブ
+ * @param {Object} data - 出力データ
+ * @returns {boolean} 出力結果
+ */
+function outputSingleProductCode(tab, data) {
   try {
     // データの最終行に追加（上書き防止）
     const lastRow = tab.getLastRow();
